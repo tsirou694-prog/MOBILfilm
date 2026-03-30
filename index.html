@@ -208,9 +208,6 @@ outline:none;transition:border-color .15s;margin-bottom:6px;
 /* poster hidden */
 .poster-section{display:none}
 .poster-section.visible{display:block}
-/* filmroll hidden for poster */
-.filmroll-section{display:block}
-.filmroll-section.hidden{display:none}
 </style>
 </head>
 <body>
@@ -272,7 +269,7 @@ outline:none;transition:border-color .15s;margin-bottom:6px;
       </div>
     </div>
     <!-- Film Roll only -->
-    <div id="filmroll-settings" class="filmroll-section">
+    <div id="filmroll-settings">
       <div class="sec">
         <span class="lbl">版式</span>
         <div class="mode-row">
@@ -291,17 +288,6 @@ outline:none;transition:border-color .15s;margin-bottom:6px;
     </div>
     <!-- Poster only -->
     <div id="poster-settings" class="poster-section">
-      <div class="sec">
-        <span class="lbl">版式</span>
-        <div class="mode-row">
-          <button class="mode-btn act" data-m="portrait" onclick="selMode(this)">
-            <span class="mn">竖版照片</span><span class="ms">帧 2:3 竖向</span>
-          </button>
-          <button class="mode-btn" data-m="landscape" onclick="selMode(this)">
-            <span class="mn">横版照片</span><span class="ms">帧 3:2 横向</span>
-          </button>
-        </div>
-      </div>
       <div class="sec">
         <span class="lbl">海报标题</span>
         <input class="txin" id="posterTitle" placeholder="LIFE WITH FILM" maxlength="32" style="font-family:'Special Elite',cursive;font-size:15px">
@@ -345,11 +331,11 @@ outline:none;transition:border-color .15s;margin-bottom:6px;
   <!-- PANEL: 布局 -->
   <div class="panel" id="panel-layout">
     <div class="sec">
-      <span class="lbl" id="layoutLabel">每行帧数</span>
+      <span class="lbl">每行帧数</span>
       <div class="slrow">
-        <span id="layoutMin">3</span>
-        <input type="range" min="1" max="7" value="5" step="1" id="fpsr" oninput="updateLayoutUI();document.getElementById('fpsv').textContent=this.value">
-        <span id="layoutMax">7</span>
+        <span>3</span>
+        <input type="range" min="3" max="7" value="5" step="1" id="fpsr" oninput="document.getElementById('fpsv').textContent=this.value">
+        <span>7</span>
         <span class="sval" id="fpsv">5</span>
       </div>
     </div>
@@ -380,18 +366,20 @@ const sheetHandle = document.getElementById('sheetHandle');
 let sheetOpen = false;
 
 sheetHandle.addEventListener('click', (e) => {
+  // 只有点击handle-row的空白部分才触发抽屉
   if (e.target.closest('.sheet-tabs')) return;
   sheetOpen = !sheetOpen;
   sheet.classList.toggle('open', sheetOpen);
 });
 
 function switchTab(e, el) {
-  e.stopPropagation();
+  e.stopPropagation(); // 阻止事件冒泡到抽屉触发区域
   document.querySelectorAll('.stab').forEach(t => t.classList.remove('act'));
   el.classList.add('act');
   const panelId = 'panel-' + el.dataset.panel;
   document.querySelectorAll('.panel').forEach(p => p.classList.remove('active'));
   document.getElementById(panelId).classList.add('active');
+  // 自动打开抽屉
   if (!sheetOpen) { sheetOpen = true; sheet.classList.add('open'); }
 }
 
@@ -420,45 +408,20 @@ const LAND={
 };
 
 // ═══════════════════════════════
-// 布局UI动态切换（关键新增）
-// ═══════════════════════════════
-function updateLayoutUI(){
-  const fpsr = document.getElementById('fpsr');
-  const layoutLabel = document.getElementById('layoutLabel');
-  const layoutMin = document.getElementById('layoutMin');
-  
-  if(outputMode === 'poster'){
-    layoutLabel.textContent = '每列张数';
-    layoutMin.textContent = '1';
-    fpsr.min = '1';
-    // 如果是海报但值小于3胶卷最小值，允许保留
-  } else {
-    layoutLabel.textContent = '每行帧数';
-    layoutMin.textContent = '3';
-    // 切回胶卷模式时，如果值小于3自动调到3
-    if(parseInt(fpsr.value) < 3){
-      fpsr.value = '3';
-      document.getElementById('fpsv').textContent = '3';
-    }
-    fpsr.min = '3';
-  }
-}
-
-// ═══════════════════════════════
-// 轻量级EXIF旋转读取
+// 轻量级EXIF旋转读取（仅手机端核心需求）
 // ═══════════════════════════════
 function getExifOrientation(file) {
   return new Promise((resolve) => {
     const reader = new FileReader();
     reader.onload = (e) => {
       const view = new DataView(e.target.result);
-      if (view.getUint16(0, false) !== 0xFFD8) return resolve(1);
+      if (view.getUint16(0, false) !== 0xFFD8) return resolve(1); // 不是JPG
       let offset = 2;
       while (offset < view.byteLength) {
         const marker = view.getUint16(offset, false);
         offset += 2;
-        if (marker === 0xFFE1) {
-          if (view.getUint32(offset + 2, false) !== 0x45786966) return resolve(1);
+        if (marker === 0xFFE1) { // APP1标记
+          if (view.getUint32(offset + 2, false) !== 0x45786966) return resolve(1); // 不是EXIF
           const little = view.getUint16(offset + 8, false) === 0x4949;
           offset += 10;
           const tags = view.getUint16(offset, little);
@@ -478,16 +441,18 @@ function getExifOrientation(file) {
       return resolve(1);
     };
     reader.onerror = () => resolve(1);
-    reader.readAsArrayBuffer(file.slice(0, 65536));
+    reader.readAsArrayBuffer(file.slice(0, 65536)); // 只读取前64KB足够
   });
 }
 
 // ═══════════════════════════════
-// UPLOAD
+// UPLOAD - 手机端彻底优化版
 // ═══════════════════════════════
 const uz=document.getElementById('uz');
 const fi=document.getElementById('fi');
 
+// 不再需要uz的click事件，Label已接管
+// 但保留拖拽功能（主要针对平板/桌面，手机也有部分支持）
 uz.addEventListener('dragover', e => {
   e.preventDefault();
   e.stopPropagation();
@@ -509,6 +474,7 @@ uz.addEventListener('drop', e => {
   }
 });
 
+// 只监听fi的change事件
 fi.addEventListener('change', e => {
   if (e.target.files.length > 0) {
     addFiles(e.target.files);
@@ -534,6 +500,7 @@ async function addFiles(files){
   
   setErr('');
   const arr = Array.from(files).filter(f => {
+    // 更宽松但兼容的文件类型检查
     if (!f.type.startsWith('image/')) {
       setErr(`已跳过不支持的文件: ${f.name}`);
       return false;
@@ -551,6 +518,7 @@ async function addFiles(files){
   let loadedCount = 0;
   let failedCount = 0;
   
+  // 更新上传区域状态
   const upTxt = uz.querySelector('.up-txt');
   const originalUpText = upTxt.innerHTML;
   upTxt.innerHTML = '正在处理图片...<br>请稍候';
@@ -575,18 +543,22 @@ async function addFiles(files){
       failedCount++;
       console.error('Error loading image:', e);
     }
+    
+    // 每加载一张更新一次界面
     renderThumbs();
   }
   
+  // 恢复状态
   isProcessing = false;
   upTxt.innerHTML = originalUpText;
-  fi.value = '';
+  fi.value = ''; // 重置文件输入，允许再次选择相同文件
   
   if (failedCount > 0) {
     setErr(`${failedCount} 张图片加载失败`);
   }
 }
 
+// 添加orientation参数处理旋转
 function loadImage(file, orientation) {
   return new Promise((resolve) => {
     const url = URL.createObjectURL(file);
@@ -595,7 +567,7 @@ function loadImage(file, orientation) {
     const timeoutId = setTimeout(() => {
       URL.revokeObjectURL(url);
       resolve(null);
-    }, 15000);
+    }, 15000); // 手机端延长超时时间
     
     img.onload = () => {
       clearTimeout(timeoutId);
@@ -607,7 +579,7 @@ function loadImage(file, orientation) {
           canvas: canvas,
           name: file.name,
           crop: 'mid',
-          orientation: orientation
+          orientation: orientation // 保存后续重新裁剪用
         });
       } catch (e) {
         URL.revokeObjectURL(url);
@@ -625,6 +597,7 @@ function loadImage(file, orientation) {
   });
 }
 
+// 添加orientation参数处理旋转
 function normalizeImg(src,crop,targetAsp,orientation){
   if(targetAsp===undefined) targetAsp=filmMode==='portrait'?(2/3):(3/2);
   const TW=filmMode==='portrait'?400:600;
@@ -633,34 +606,38 @@ function normalizeImg(src,crop,targetAsp,orientation){
   const ctx=c.getContext('2d');
   ctx.fillStyle='#111';ctx.fillRect(0,0,TW,TH);
   
+  // 处理EXIF旋转
   let sw=src.naturalWidth||src.width,sh=src.naturalHeight||src.height;
   let srcX=0,srcY=0,srcW=sw,srcH=sh;
   const sAsp=sw/sh;
   
+  // 先裁剪再旋转，或者先旋转再裁剪？这里先确定裁剪区域，再用变换矩阵处理
   if(sAsp>targetAsp){srcW=sh*targetAsp;srcX=(sw-srcW)/2}
   else{srcH=sw/targetAsp;const spare=sh-srcH;srcY=crop==='top'?0:crop==='bot'?spare:spare/2}
   
+  // 应用变换
   ctx.save();
   switch(orientation){
-    case 2:
+    case 2: // 水平翻转
       ctx.translate(TW, 0);
       ctx.scale(-1, 1);
       break;
-    case 3:
+    case 3: // 180度旋转
       ctx.translate(TW, TH);
       ctx.rotate(Math.PI);
       break;
-    case 4:
+    case 4: // 垂直翻转
       ctx.translate(0, TH);
       ctx.scale(1, -1);
       break;
-    case 5:
+    case 5: // 水平翻转+270度旋转
       ctx.rotate(0.5 * Math.PI);
       ctx.scale(1, -1);
       break;
-    case 6:
+    case 6: // 270度旋转（最常见的手机竖拍）
       ctx.rotate(0.5 * Math.PI);
       ctx.translate(0, -TH);
+      // 注意：旋转后宽高要交换
       const tempTW = TW;
       const tempTH = TH;
       c.width = tempTH;
@@ -670,14 +647,15 @@ function normalizeImg(src,crop,targetAsp,orientation){
       ctx.rotate(0.5 * Math.PI);
       ctx.translate(0, -c.height);
       break;
-    case 7:
+    case 7: // 水平翻转+90度旋转
       ctx.rotate(-0.5 * Math.PI);
       ctx.translate(-TW, 0);
       ctx.scale(1, -1);
       break;
-    case 8:
+    case 8: // 90度旋转
       ctx.rotate(-0.5 * Math.PI);
       ctx.translate(-TW, 0);
+      // 注意：旋转后宽高要交换
       const tempTW2 = TW;
       const tempTH2 = TH;
       c.width = tempTH2;
@@ -689,6 +667,7 @@ function normalizeImg(src,crop,targetAsp,orientation){
       break;
   }
   
+  // 绘制
   ctx.drawImage(src,srcX,srcY,srcW,srcH,0,0,c.width,c.height);
   ctx.restore();
   return c;
@@ -724,39 +703,21 @@ function renderThumbs(){
 function selOutMode(btn){
   document.querySelectorAll('.outmode-btn').forEach(b=>b.classList.remove('act'));
   btn.classList.add('act');outputMode=btn.dataset.om;
-  
-  // 动态显示/隐藏区域
-  document.getElementById('filmroll-settings').classList.toggle('hidden', outputMode!=='filmroll');
-  document.getElementById('poster-settings').classList.toggle('visible', outputMode==='poster');
-  document.getElementById('dateSection').style.display=outputMode==='filmroll'?'':'none';
-  document.getElementById('panel-film').style.display=outputMode==='filmroll'?'':'none';
-  
-  // 切换版式按钮的文字
-  const modeBtns = document.querySelectorAll('#panel-mode .mode-btn');
-  if(outputMode === 'poster'){
-    modeBtns[0].querySelector('.mn').textContent = '竖版照片';
-    modeBtns[1].querySelector('.mn').textContent = '横版照片';
-  } else {
-    modeBtns[0].querySelector('.mn').textContent = '竖版';
-    modeBtns[1].querySelector('.mn').textContent = '横版';
-  }
-  
-  // 更新布局UI
-  updateLayoutUI();
+  const isFilm=outputMode==='filmroll';
+  document.getElementById('filmroll-settings').style.display=isFilm?'':'none';
+  document.getElementById('poster-settings').classList.toggle('visible',!isFilm);
+  document.getElementById('dateSection').style.display=isFilm?'':'none';
 }
-
 function selMode(btn){
-  document.querySelectorAll('#panel-mode .mode-btn').forEach(b=>b.classList.remove('act'));
+  document.querySelectorAll('.mode-btn').forEach(b=>b.classList.remove('act'));
   btn.classList.add('act');filmMode=btn.dataset.m;
   photos.forEach(p=>{p.canvas=normalizeImg(p.raw,p.crop,undefined,p.orientation)});renderThumbs();
 }
-
 function selPreset(btn){
   document.querySelectorAll('.pbtn').forEach(b=>b.classList.remove('act'));
   btn.classList.add('act');preset=btn.dataset.p;
   document.getElementById('isec').style.display=preset==='none'?'none':'';
 }
-
 function selInt(btn){
   document.querySelectorAll('.ibtn').forEach(b=>b.classList.remove('act'));
   btn.classList.add('act');intensity=parseInt(btn.dataset.v);
@@ -924,136 +885,72 @@ function applyLook(src,pr,intPct){
   return out;
 }
 // ═══════════════════════════════
-// 海报模式专用绘制（关键新增：单列/横版支持）
+// DRAW FILM STRIP ROW
+// ═══════════════════════════════
+function drawFilmStripRow(ctx,row,rows,rowPhotos,stripX,y,fps,STRIP_W,STRIP_H,FRAME_W,FRAME_H,PERF_H,pr,globalFrame){
+  const emptySlots=fps-rowPhotos.length;
+  ctx.fillStyle=pr.filmBg;
+  if(row===rows-1&&emptySlots>0){
+    const tongueWidth=emptySlots*(FRAME_W+GAP);
+    const ts=stripX+STRIP_W-tongueWidth,hz=PERF_H;
+    const midTop=y+hz,midBot=y+STRIP_H-hz;
+    const notchW=tongueWidth*0.1;
+    const notchTop=midTop-(midBot-midTop)*0.05,notchBot=midBot+(midBot-midTop)*0.05;
+    const cornerRadius=8;
+    ctx.beginPath();ctx.moveTo(stripX,y);ctx.lineTo(ts,y);ctx.lineTo(ts,notchTop);ctx.lineTo(ts+notchW,notchTop);ctx.lineTo(ts+notchW,midTop);ctx.quadraticCurveTo(stripX+STRIP_W,midTop,stripX+STRIP_W,midTop+cornerRadius);ctx.lineTo(stripX+STRIP_W,midBot-cornerRadius);ctx.quadraticCurveTo(stripX+STRIP_W,midBot,stripX+STRIP_W-cornerRadius,midBot);ctx.lineTo(ts+notchW,midBot);ctx.lineTo(ts+notchW,notchBot);ctx.lineTo(ts,notchBot);ctx.lineTo(stripX,y+STRIP_H);ctx.lineTo(stripX,y);ctx.closePath();ctx.fill();
+    const tailGrad=ctx.createLinearGradient(ts,0,stripX+STRIP_W,0);tailGrad.addColorStop(0,'rgba(0,0,0,0)');tailGrad.addColorStop(1,'rgba(0,0,0,0.6)');ctx.save();ctx.fillStyle=tailGrad;ctx.fillRect(ts,y,tongueWidth,STRIP_H);ctx.restore();
+    drawPerfs(ctx,stripX,y,ts-stripX,PERF_H,pr);drawPerfs(ctx,stripX,y+STRIP_H-PERF_H,ts-stripX,PERF_H,pr);
+  }else{ctx.fillRect(stripX,y,STRIP_W,STRIP_H);drawPerfs(ctx,stripX,y,STRIP_W,PERF_H,pr);drawPerfs(ctx,stripX,y+STRIP_H-PERF_H,STRIP_W,PERF_H,pr)}
+  for(let f=0;f<fps;f++){
+    const fx=stripX+EDGE+f*(FRAME_W+GAP),fy=y+PERF_H;
+    if(f<rowPhotos.length){const processed=applyLook(rowPhotos[f].canvas,pr,intensity);ctx.save();ctx.beginPath();ctx.rect(fx,fy,FRAME_W,FRAME_H);ctx.clip();ctx.drawImage(processed,fx,fy,FRAME_W,FRAME_H);ctx.restore()}
+    if(f<rowPhotos.length){ctx.fillStyle='rgba(255,255,255,0.22)';ctx.font=`bold ${Math.round(STRIP_H*0.07)}px monospace`;ctx.textAlign='center';ctx.fillText((globalFrame+f+1).toString(),fx+FRAME_W/2,y+PERF_H-Math.round(PERF_H*0.2))}
+  }
+  const ldrName=LEADERS[leaderIdx].name.replace('\n',' ').toUpperCase();
+  ctx.font=`${Math.round(PERF_H*0.4)}px monospace`;ctx.fillStyle='rgba(255,255,255,0.18)';ctx.textAlign='left';ctx.fillText(ldrName,stripX+EDGE,y+PERF_H*0.55);
+}
+// ═══════════════════════════════
+// GENERATE POSTER
 // ═══════════════════════════════
 function generatePoster(){
   const n=photos.length,pr=PRESETS[preset];
-  const colCount = parseInt(document.getElementById('fpsr').value); // 海报改叫列数
+  const fps=parseInt(document.getElementById('fpsr').value);
   const titleText=document.getElementById('posterTitle').value.trim()||'LIFE WITH FILM';
   const tags=[document.getElementById('tag1').value.trim(),document.getElementById('tag2').value.trim(),document.getElementById('tag3').value.trim()].filter(t=>t.length>0);
-  
-  // 海报模式下，横版照片=宽照片占主导，画布可能自动调横
-  let FRAME_W, FRAME_H, GAP_P = 8, P_MARGIN=30, P_TITLE_H=70, P_TAG_H=tags.length>0?60:0;
-  
-  // 复用filmMode的比例，但调整画布尺寸逻辑
-  if(filmMode==='portrait'){
-    FRAME_W = 220;
-    FRAME_H = Math.round(FRAME_W * 1.5);
-  } else {
-    FRAME_W = 280;
-    FRAME_H = Math.round(FRAME_W / 1.5);
-  }
-  
-  // 单列的话稍微放大照片
-  if(colCount === 1){
-    FRAME_W = Math.min(FRAME_W * 1.2, 500);
-    FRAME_H = filmMode==='portrait' ? Math.round(FRAME_W * 1.5) : Math.round(FRAME_W / 1.5);
-  }
-  
-  const totalContentW = colCount * FRAME_W + (colCount - 1) * GAP_P;
-  const totalContentH = Math.ceil(n / colCount) * FRAME_H + (Math.ceil(n / colCount) - 1) * GAP_P;
-  
-  // 调整画布尺寸，优先竖版，但如果横版照片+列数少，可以考虑横版（可选，这里先做自适应）
-  let finalW = totalContentW + P_MARGIN * 2;
-  let finalH = P_MARGIN + P_TITLE_H + totalContentH + P_TAG_H + P_MARGIN;
-  
-  // 缩放系数
-  const S = 2;
+  let PERF_H,FRAME_W,FRAME_H,STRIP_H,STRIP_W;
+  if(filmMode==='portrait'){PERF_H=PORT.perfH;FRAME_W=PORT.frameW;FRAME_H=PORT.frameH;STRIP_H=PORT.stripH;STRIP_W=PORT.stripW(fps)}
+  else{PERF_H=LAND.perfH;FRAME_H=LAND.frameH;FRAME_W=LAND.frameW;STRIP_H=LAND.stripH;STRIP_W=LAND.stripW(fps)}
+  const S=2,rows=Math.ceil(n/fps);
+  const P_MARGIN=40,P_TITLE_H=80,P_COUNT_H=32,P_ROW_GAP=12,P_TAG_H=tags.length>0?70:0;
+  const contentW=STRIP_W,fullW=contentW+P_MARGIN*2;
+  const stripsH=rows*STRIP_H+(rows-1)*P_ROW_GAP,fullH=P_MARGIN+P_TITLE_H+P_COUNT_H+stripsH+P_TAG_H+P_MARGIN;
   const cv=document.getElementById('cv'),ctx=cv.getContext('2d');
-  cv.width=finalW*S;cv.height=finalH*S;cv.style.width=finalW+'px';cv.style.height=finalH+'px';ctx.scale(S,S);
-  
-  // 背景
-  ctx.fillStyle='#ffffff';ctx.fillRect(0,0,finalW,finalH);
-  for(let i=0;i<1200;i++){ctx.fillStyle=`rgba(0,0,0,${Math.random()*0.012})`;ctx.fillRect(Math.random()*finalW,Math.random()*finalH,1,1)}
-  
-  // 标题
-  let curY = P_MARGIN;
-  ctx.fillStyle='#111111';
-  // 单列标题居中更大，多列左对齐
-  if(colCount === 1){
-    ctx.textAlign='center';
-    ctx.font=`bold 48px 'Special Elite', monospace`;
-    ctx.fillText(titleText.toUpperCase(), finalW/2, curY+55);
-  } else {
-    ctx.textAlign='left';
-    ctx.font=`bold 42px 'Special Elite', monospace`;
-    ctx.fillText(titleText.toUpperCase(), P_MARGIN, curY+50);
+  cv.width=fullW*S;cv.height=fullH*S;cv.style.width=fullW+'px';cv.style.height=fullH+'px';ctx.scale(S,S);
+  ctx.fillStyle='#ffffff';ctx.fillRect(0,0,fullW,fullH);
+  for(let i=0;i<1200;i++){ctx.fillStyle=`rgba(0,0,0,${Math.random()*0.012})`;ctx.fillRect(Math.random()*fullW,Math.random()*fullH,1,1)}
+  let curY=P_MARGIN;
+  ctx.fillStyle='#111111';ctx.font=`bold 42px 'Special Elite', monospace`;ctx.textAlign='left';ctx.fillText(titleText.toUpperCase(),P_MARGIN,curY+50);curY+=P_TITLE_H;
+  ctx.fillStyle='#bbb';ctx.fillRect(P_MARGIN,curY+4,14,14);ctx.fillStyle='#888';ctx.font=`14px 'Noto Serif SC', serif`;ctx.fillText(`${n}`,P_MARGIN+20,curY+16);curY+=P_COUNT_H;
+  const stripX=P_MARGIN;let globalFrame=0;
+  for(let row=0;row<rows;row++){
+    if(row>0)curY+=P_ROW_GAP;
+    const rowPhotos=photos.slice(row*fps,(row+1)*fps);
+    drawFilmStripRow(ctx,row,rows,rowPhotos,stripX,curY,fps,STRIP_W,STRIP_H,FRAME_W,FRAME_H,PERF_H,pr,globalFrame);
+    globalFrame+=rowPhotos.length;curY+=STRIP_H;
   }
-  curY += P_TITLE_H;
-  
-  // 照片网格
-  const startX = (finalW - totalContentW) / 2;
-  let globalFrame = 0;
-  const rows = Math.ceil(n / colCount);
-  
-  for(let row=0; row<rows; row++){
-    const startY = curY + row * (FRAME_H + GAP_P);
-    for(let col=0; col<colCount; col++){
-      const idx = row * colCount + col;
-      if(idx >= n) break;
-      
-      const x = startX + col * (FRAME_W + GAP_P);
-      const y = startY;
-      
-      // 绘制照片
-      const processed = applyLook(photos[idx].canvas, pr, intensity);
-      // 裁剪或缩放适配
-      const srcW = processed.width, srcH = processed.height;
-      const srcAsp = srcW / srcH;
-      const destAsp = FRAME_W / FRAME_H;
-      let sx=0, sy=0, sw=srcW, sh=srcH;
-      
-      if(srcAsp > destAsp){
-        sw = srcH * destAsp;
-        sx = (srcW - sw)/2;
-      } else {
-        sh = srcW / destAsp;
-        sy = (srcH - sh)/2;
-      }
-      
-      ctx.drawImage(processed, sx, sy, sw, sh, x, y, FRAME_W, FRAME_H);
-      
-      // 绘制序号（可选，海报模式可选加，这里加个小的复古序号）
-      ctx.fillStyle='rgba(0,0,0,0.3)';
-      ctx.font=`12px 'Special Elite', monospace`;
-      ctx.textAlign='left';
-      ctx.fillText((idx+1).toString(), x+8, y+FRAME_H-10);
-    }
-  }
-  
-  curY += totalContentH + 10;
-  
-  // 底部标签
   if(tags.length>0){
-    const tagH=32,tagPadX=12,tagFontSize=12,tagGap=8,tagRadius=3;
-    ctx.font=`${tagFontSize}px 'Noto Serif SC', monospace`;
-    let tagX;
-    if(colCount === 1){
-      ctx.textAlign='center';
-      // 计算总宽度来居中
-      let totalTagW = 0;
-      tags.forEach(t=>totalTagW += ctx.measureText(t).width + tagPadX*2 + tagGap);
-      totalTagW -= tagGap;
-      tagX = (finalW - totalTagW)/2;
-    } else {
-      ctx.textAlign='left';
-      tagX = P_MARGIN;
-    }
+    curY+=24;const tagH=36,tagPadX=14,tagFontSize=13,tagGap=10,tagRadius=4;
+    ctx.font=`${tagFontSize}px 'Noto Serif SC', monospace`;let tagX=P_MARGIN;
     tags.forEach(tagText=>{
       const textW=ctx.measureText(tagText).width,tW=textW+tagPadX*2;
       ctx.fillStyle='#111111';rrect(ctx,tagX,curY,tW,tagH,tagRadius);ctx.fill();
-      ctx.fillStyle='#ffffff';
-      if(colCount === 1) ctx.textAlign='center';
-      ctx.font=`${tagFontSize}px 'Noto Serif SC', monospace`;
-      ctx.fillText(tagText,colCount===1?tagX+tW/2:tagX+tagPadX,curY+tagPadX+tagFontSize);
-      tagX+=tW+tagGap;
+      ctx.fillStyle='#ffffff';ctx.textAlign='left';ctx.font=`${tagFontSize}px 'Noto Serif SC', monospace`;ctx.fillText(tagText,tagX+tagPadX,curY+tagPadX+tagFontSize);tagX+=tW+tagGap;
     });
   }
-  
   document.getElementById('ph').style.display='none';cv.style.display='block';document.getElementById('expb').disabled=false;
 }
 // ═══════════════════════════════
-// 胶卷模式保持不变（简化逻辑复用）
+// GENERATE FILM ROLL
 // ═══════════════════════════════
 function generateFilmRoll(){
   const n=photos.length,pr=PRESETS[preset];
@@ -1079,39 +976,10 @@ function generateFilmRoll(){
   const ox=wbOff,oy=wbOff;let contentY=oy+PAD;
   if(dateStr){ctx.font='italic 11px Georgia,serif';ctx.fillStyle='#aaa';ctx.textAlign='left';ctx.fillText(dateStr,ox+LEFT_PAD,contentY+13);contentY+=20}else{contentY+=8}
   const stripX=ox+LEFT_PAD;let globalFrame=0;
-  
-  // 复用胶卷绘制的小助手函数
-  function drawPerfsLocal(ctx,x,y,sw,perfH,pr){
-    const hCount=Math.max(4,Math.round(sw/20));
-    const hW=9,hH=Math.round(perfH*0.55),hR=2;
-    const hs=sw/hCount;
-    ctx.fillStyle=pr.holeBg;
-    for(let i=0;i<hCount;i++){rrect(ctx,x+hs*i+(hs-hW)/2,y+(perfH-hH)/2,hW,hH,hR);ctx.fill()}
-  }
-  
   for(let row=0;row<rows;row++){
     if(row>0)contentY+=ROW_GAP;
     const rowPhotos=photos.slice(row*fps,(row+1)*fps);const y=contentY;
-    const emptySlots=fps-rowPhotos.length;
-    ctx.fillStyle=pr.filmBg;
-    if(row===rows-1&&emptySlots>0){
-      const tongueWidth=emptySlots*(FRAME_W+GAP);
-      const ts=stripX+STRIP_W-tongueWidth,hz=PERF_H;
-      const midTop=y+hz,midBot=y+STRIP_H-hz;
-      const notchW=tongueWidth*0.1;
-      const notchTop=midTop-(midBot-midTop)*0.05,notchBot=midBot+(midBot-midTop)*0.05;
-      const cornerRadius=8;
-      ctx.beginPath();ctx.moveTo(stripX,y);ctx.lineTo(ts,y);ctx.lineTo(ts,notchTop);ctx.lineTo(ts+notchW,notchTop);ctx.lineTo(ts+notchW,midTop);ctx.quadraticCurveTo(stripX+STRIP_W,midTop,stripX+STRIP_W,midTop+cornerRadius);ctx.lineTo(stripX+STRIP_W,midBot-cornerRadius);ctx.quadraticCurveTo(stripX+STRIP_W,midBot,stripX+STRIP_W-cornerRadius,midBot);ctx.lineTo(ts+notchW,midBot);ctx.lineTo(ts+notchW,notchBot);ctx.lineTo(ts,notchBot);ctx.lineTo(stripX,y+STRIP_H);ctx.lineTo(stripX,y);ctx.closePath();ctx.fill();
-      const tailGrad=ctx.createLinearGradient(ts,0,stripX+STRIP_W,0);tailGrad.addColorStop(0,'rgba(0,0,0,0)');tailGrad.addColorStop(1,'rgba(0,0,0,0.6)');ctx.save();ctx.fillStyle=tailGrad;ctx.fillRect(ts,y,tongueWidth,STRIP_H);ctx.restore();
-      drawPerfsLocal(ctx,stripX,y,ts-stripX,PERF_H,pr);drawPerfsLocal(ctx,stripX,y+STRIP_H-PERF_H,ts-stripX,PERF_H,pr);
-    }else{ctx.fillRect(stripX,y,STRIP_W,STRIP_H);drawPerfsLocal(ctx,stripX,y,STRIP_W,PERF_H,pr);drawPerfsLocal(ctx,stripX,y+STRIP_H-PERF_H,STRIP_W,PERF_H,pr)}
-    for(let f=0;f<fps;f++){
-      const fx=stripX+EDGE+f*(FRAME_W+GAP),fy=y+PERF_H;
-      if(f<rowPhotos.length){const processed=applyLook(rowPhotos[f].canvas,pr,intensity);ctx.save();ctx.beginPath();ctx.rect(fx,fy,FRAME_W,FRAME_H);ctx.clip();ctx.drawImage(processed,fx,fy,FRAME_W,FRAME_H);ctx.restore()}
-      if(f<rowPhotos.length){ctx.fillStyle='rgba(255,255,255,0.22)';ctx.font=`bold ${Math.round(STRIP_H*0.07)}px monospace`;ctx.textAlign='center';ctx.fillText((globalFrame+f+1).toString(),fx+FRAME_W/2,y+PERF_H-Math.round(PERF_H*0.2))}
-    }
-    const ldrName=LEADERS[leaderIdx].name.replace('\n',' ').toUpperCase();
-    ctx.font=`${Math.round(PERF_H*0.4)}px monospace`;ctx.fillStyle='rgba(255,255,255,0.18)';ctx.textAlign='left';ctx.fillText(ldrName,stripX+EDGE,y+PERF_H*0.55);
+    drawFilmStripRow(ctx,row,rows,rowPhotos,stripX,y,fps,STRIP_W,STRIP_H,FRAME_W,FRAME_H,PERF_H,pr,globalFrame);
     if(row===0){const canX=stripX-CAN_W+CAN_OVERLAP;drawCanister(ctx,canX,y,CAN_W,CAN_W*(STRIP_H/(STRIP_H*0.60)))}
     globalFrame+=rowPhotos.length;contentY+=STRIP_H;
   }
@@ -1129,6 +997,7 @@ function generate(){
   if(n<8){setErr('至少需要8张照片');return}
   if(n>36){setErr('最多36张');return}
   setErr('');
+  // collapse sheet to show preview
   sheetOpen=false;sheet.classList.remove('open');
   if(outputMode==='poster')generatePoster();else generateFilmRoll();
 }
@@ -1146,7 +1015,6 @@ function exportPNG(){
 // ═══════════════════════════════
 initLeaderGrid();
 renderThumbs();
-updateLayoutUI(); // 初始化布局UI
 </script>
 </body>
 </html>
