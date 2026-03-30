@@ -1,9 +1,8 @@
 <!DOCTYPE html>
-
 <html lang="zh-CN">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
 <title>135 FILM · 胶片拼图</title>
 <style>
 @import url('https://fonts.googleapis.com/css2?family=Special+Elite&family=Noto+Serif+SC:wght@300;400;600&display=swap');
@@ -14,29 +13,33 @@
   --sf:#181818;--sf2:#1e1e1e;
   --sheet-h: 60vh;
 }
-*{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent}
+*{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent;outline:none}
 html,body{height:100%;overflow:hidden}
 body{background:var(--bg);color:var(--tx);font-family:'Noto Serif SC',serif;display:flex;flex-direction:column}
-
+/* ── 移动端核心交互优化 ── */
+button, .stab, .sheet-handle-row, .lopt, .cbtn, .pbtn, .ibtn, .mode-btn, .outmode-btn{
+  touch-action: manipulation; /* 直接取消300ms延迟 */
+  user-select: none;
+  -webkit-user-select: none;
+}
 /* ── HEADER ── */
 header{
-height:48px;background:#080808;border-bottom:1px solid var(–bdr);
+height:48px;background:#080808;border-bottom:1px solid var(--bdr);
 display:flex;align-items:center;padding:0 16px;gap:10px;flex-shrink:0;
 position:relative;z-index:10;
 }
-.logo{font-family:‘Special Elite’,cursive;font-size:15px;color:var(–amber);letter-spacing:.06em}
-.logo-sub{font-size:10px;color:var(–txd);letter-spacing:.15em}
+.logo{font-family:'Special Elite',cursive;font-size:15px;color:var(--amber);letter-spacing:.06em}
+.logo-sub{font-size:10px;color:var(--txd);letter-spacing:.15em}
 .header-btns{margin-left:auto;display:flex;gap:8px;align-items:center}
 .hbtn{
-padding:5px 11px;border-radius:4px;font-size:11px;font-family:‘Special Elite’,cursive;
+padding:5px 11px;border-radius:4px;font-size:11px;font-family:'Special Elite',cursive;
 cursor:pointer;letter-spacing:.04em;border:none;transition:all .15s;
 }
-.hbtn-gen{background:var(–amber);color:#0e0e0e;font-weight:700}
+.hbtn-gen{background:var(--amber);color:#0e0e0e;font-weight:700}
 .hbtn-gen:active{transform:scale(.95)}
 .hbtn-gen:disabled{background:#333;color:#555;cursor:not-allowed;transform:none}
-.hbtn-exp{background:transparent;border:1px solid var(–amber);color:var(–amber)}
+.hbtn-exp{background:transparent;border:1px solid var(--amber);color:var(--amber)}
 .hbtn-exp:disabled{border-color:#333;color:#444;cursor:not-allowed}
-
 /* ── CANVAS AREA ── */
 .ca{
 flex:1;display:flex;align-items:flex-start;justify-content:center;
@@ -46,20 +49,19 @@ padding:16px;overflow:auto;background:#0a0a0a;
 .ca::-webkit-scrollbar{display:none}
 .ph{
 display:flex;flex-direction:column;align-items:center;justify-content:center;
-gap:12px;color:var(–txd);text-align:center;margin:auto;
+gap:12px;color:var(--txd);text-align:center;margin:auto;
 }
 .phi{font-size:48px;opacity:.18}
 .pht{font-size:14px;color:#444}
 .phs{font-size:11px;line-height:1.9;opacity:.55;max-width:260px}
 #cv{display:block;max-width:100%;height:auto;box-shadow:0 6px 40px rgba(0,0,0,.8);border-radius:2px}
-
 /* ── BOTTOM SHEET ── */
 .sheet-wrap{
 position:fixed;bottom:0;left:0;right:0;z-index:100;
 pointer-events:none;
 }
 .sheet{
-background:var(–sb);border-top:1px solid var(–bdr);
+background:var(--sb);border-top:1px solid var(--bdr);
 border-radius:16px 16px 0 0;
 pointer-events:all;
 transform:translateY(calc(100% - 56px));
@@ -81,37 +83,36 @@ width:36px;height:4px;background:#333;border-radius:2px;
 .sheet-tabs::-webkit-scrollbar{display:none}
 .stab{
 padding:5px 12px;border-radius:20px;font-size:11px;white-space:nowrap;
-background:var(–sf2);border:1px solid var(–bdr);color:var(–txd);
+background:var(--sf2);border:1px solid var(--bdr);color:var(--txd);
 cursor:pointer;transition:all .15s;flex-shrink:0;
 }
-.stab.act{background:rgba(200,136,42,.12);border-color:var(–amber);color:var(–amber)}
+.stab.act{background:rgba(200,136,42,.12);border-color:var(--amber);color:var(--amber)}
 .sheet-body{
 overflow-y:auto;-webkit-overflow-scrolling:touch;flex:1;
 padding:0 0 env(safe-area-inset-bottom,16px);
 }
 .sheet-body::-webkit-scrollbar{width:3px}
 .sheet-body::-webkit-scrollbar-thumb{background:#2a2a2a}
-
 /* ── PANELS ── */
 .panel{display:none;padding:14px 16px 20px}
 .panel.active{display:block}
-
-/* Upload */
-.lbl{font-size:10px;color:var(–txd);letter-spacing:.18em;text-transform:uppercase;display:block;margin-bottom:8px}
+/* Upload - 改用Label包裹的移动端兼容方案 */
+.lbl{font-size:10px;color:var(--txd);letter-spacing:.18em;text-transform:uppercase;display:block;margin-bottom:8px}
 .upz{
 border:1px dashed #2e2e2e;border-radius:6px;padding:14px 10px;
-text-align:center;cursor:pointer;position:relative;background:var(–sf);
-transition:all .15s;
+text-align:center;cursor:pointer;position:relative;background:var(--sf);
+transition:all .15s;display:block;width:100%;
 }
-.upz.dov{border-color:var(–amber);background:rgba(200,136,42,.06)}
-.upz input{position:absolute;inset:0;opacity:0;cursor:pointer;width:100%;height:100%}
-.up-txt{font-size:11px;color:var(–txd);line-height:1.6}
-.up-cnt{font-size:11px;color:var(–amber);margin-top:4px;font-weight:600}
+.upz.dov{border-color:var(--amber);background:rgba(200,136,42,.06)}
+/* 隐藏但不占位置，Label全权接管 */
+.upz input{position:absolute;opacity:0;visibility:hidden;pointer-events:none;width:0;height:0}
+.up-txt{font-size:11px;color:var(--txd);line-height:1.6}
+.up-cnt{font-size:11px;color:var(--amber);margin-top:4px;font-weight:600}
 .up-err{font-size:11px;color:#e05050;margin-top:3px;min-height:15px}
 .tgrid{display:grid;grid-template-columns:repeat(5,1fr);gap:3px;margin-top:10px}
 .twrap{display:flex;flex-direction:column;gap:2px}
 .thumb{aspect-ratio:3/2;border-radius:3px;overflow:hidden;position:relative;border:1.5px solid transparent;transition:border-color .12s}
-.thumb.dot{border-color:var(–amber)}
+.thumb.dot{border-color:var(--amber)}
 .thumb img{width:100%;height:100%;object-fit:cover;display:block;pointer-events:none}
 .tdel{
 position:absolute;top:2px;right:2px;width:16px;height:16px;
@@ -120,111 +121,97 @@ color:#fff;font-size:10px;cursor:pointer;display:flex;align-items:center;justify
 }
 .croprow{display:flex;gap:2px}
 .cbtn{
-flex:1;padding:2px 0;font-size:8px;background:var(–sf2);
-border:1px solid var(–bdr);border-radius:2px;color:var(–txd);
+flex:1;padding:2px 0;font-size:8px;background:var(--sf2);
+border:1px solid var(--bdr);border-radius:2px;color:var(--txd);
 cursor:pointer;text-align:center;font-family:inherit;transition:all .12s;
 }
-.cbtn.act{background:rgba(200,136,42,.15);border-color:var(–amber);color:var(–amber)}
-
+.cbtn.act{background:rgba(200,136,42,.15);border-color:var(--amber);color:var(--amber)}
 /* mode row */
 .mode-row{display:flex;gap:6px}
 .mode-btn{
-flex:1;padding:10px 4px;border:1px solid var(–bdr);border-radius:6px;
-background:var(–sf);color:var(–tx);font-size:11px;cursor:pointer;
+flex:1;padding:10px 4px;border:1px solid var(--bdr);border-radius:6px;
+background:var(--sf);color:var(--tx);font-size:11px;cursor:pointer;
 transition:all .15s;font-family:inherit;text-align:center;line-height:1.4;
 }
-.mode-btn.act{border-color:var(–amber);background:rgba(200,136,42,.1);color:var(–amber)}
+.mode-btn.act{border-color:var(--amber);background:rgba(200,136,42,.1);color:var(--amber)}
 .mn{display:block;font-weight:600;font-size:12px}
-.ms{display:block;font-size:9px;color:var(–txd);margin-top:2px}
+.ms{display:block;font-size:9px;color:var(--txd);margin-top:2px}
 .mode-btn.act .ms{color:#a06820}
-
 /* outmode */
 .outmode-row{display:flex;gap:6px}
 .outmode-btn{
-flex:1;padding:10px 4px;border:1px solid var(–bdr);border-radius:6px;
-background:var(–sf);color:var(–tx);font-size:11px;cursor:pointer;
+flex:1;padding:10px 4px;border:1px solid var(--bdr);border-radius:6px;
+background:var(--sf);color:var(--tx);font-size:11px;cursor:pointer;
 transition:all .15s;font-family:inherit;text-align:center;line-height:1.4;
 }
-.outmode-btn.act{border-color:var(–amber);background:rgba(200,136,42,.1);color:var(–amber)}
+.outmode-btn.act{border-color:var(--amber);background:rgba(200,136,42,.1);color:var(--amber)}
 .omn{display:block;font-weight:600;font-size:12px}
-.oms{display:block;font-size:9px;color:var(–txd);margin-top:2px}
+.oms{display:block;font-size:9px;color:var(--txd);margin-top:2px}
 .outmode-btn.act .oms{color:#a06820}
-
 /* leader */
 .lgrid{display:grid;grid-template-columns:repeat(3,1fr);gap:5px}
-.lopt{border:1.5px solid var(–bdr);border-radius:4px;overflow:hidden;cursor:pointer;transition:border-color .15s;background:var(–sf)}
-.lopt.act{border-color:var(–amber)}
+.lopt{border:1.5px solid var(--bdr);border-radius:4px;overflow:hidden;cursor:pointer;transition:border-color .15s;background:var(--sf)}
+.lopt.act{border-color:var(--amber)}
 .lopt canvas{display:block;width:100%;height:auto}
-.lname{font-size:8px;color:var(–txd);text-align:center;padding:3px 2px;line-height:1.2;background:var(–sf)}
-.lopt.act .lname{color:var(–amber)}
-
+.lname{font-size:8px;color:var(--txd);text-align:center;padding:3px 2px;line-height:1.2;background:var(--sf)}
+.lopt.act .lname{color:var(--amber)}
 /* preset */
 .pgrid{display:grid;grid-template-columns:1fr 1fr;gap:5px}
 .pbtn{
-padding:9px 6px;border:1px solid var(–bdr);border-radius:5px;
-background:var(–sf);color:var(–tx);font-size:10px;cursor:pointer;
+padding:9px 6px;border:1px solid var(--bdr);border-radius:5px;
+background:var(--sf);color:var(--tx);font-size:10px;cursor:pointer;
 text-align:center;font-family:inherit;transition:all .15s;line-height:1.4;
 }
-.pbtn.act{border-color:var(–amber);background:rgba(200,136,42,.1);color:var(–amber)}
+.pbtn.act{border-color:var(--amber);background:rgba(200,136,42,.1);color:var(--amber)}
 .pn{display:block;font-weight:600;font-size:11px}
-.ps{display:block;font-size:9px;color:var(–txd);margin-top:1px}
+.ps{display:block;font-size:9px;color:var(--txd);margin-top:1px}
 .pbtn.act .ps{color:#a06820}
-
 /* intensity */
 .irow{display:flex;gap:4px}
 .ibtn{
-flex:1;padding:8px 2px;border:1px solid var(–bdr);border-radius:4px;
-background:var(–sf);color:var(–txd);font-size:10px;cursor:pointer;
+flex:1;padding:8px 2px;border:1px solid var(--bdr);border-radius:4px;
+background:var(--sf);color:var(--txd);font-size:10px;cursor:pointer;
 text-align:center;font-family:inherit;transition:all .15s;
 }
-.ibtn.act{border-color:var(–amber);background:rgba(200,136,42,.1);color:var(–amber)}
-
+.ibtn.act{border-color:var(--amber);background:rgba(200,136,42,.1);color:var(--amber)}
 /* slider */
-.slrow{display:flex;align-items:center;gap:8px;font-size:11px;color:var(–txd)}
-.slrow input{flex:1;accent-color:var(–amber);cursor:pointer;height:22px}
-.sval{min-width:18px;text-align:right;color:var(–tx);font-weight:600}
-
+.slrow{display:flex;align-items:center;gap:8px;font-size:11px;color:var(--txd)}
+.slrow input{flex:1;accent-color:var(--amber);cursor:pointer;height:22px}
+.sval{min-width:18px;text-align:right;color:var(--tx);font-weight:600}
 /* toggle */
-.trow{display:flex;align-items:center;justify-content:space-between;font-size:12px;color:var(–txd);padding:2px 0}
+.trow{display:flex;align-items:center;justify-content:space-between;font-size:12px;color:var(--txd);padding:2px 0}
 .toggle{position:relative;width:40px;height:22px;cursor:pointer}
 .toggle input{opacity:0;width:0;height:0}
 .tslider{position:absolute;inset:0;background:#2a2a2a;border-radius:20px;transition:.2s}
-.tslider::before{content:’’;position:absolute;height:16px;width:16px;left:3px;bottom:3px;background:#666;border-radius:50%;transition:.2s}
+.tslider::before{content:'';position:absolute;height:16px;width:16px;left:3px;bottom:3px;background:#666;border-radius:50%;transition:.2s}
 .toggle input:checked+.tslider{background:rgba(200,136,42,.3)}
-.toggle input:checked+.tslider::before{background:var(–amber);transform:translateX(18px)}
-
+.toggle input:checked+.tslider::before{background:var(--amber);transform:translateX(18px)}
 /* text inputs */
 .txin{
-width:100%;background:var(–sf);border:1px solid var(–bdr);border-radius:5px;
-color:var(–tx);padding:9px 11px;font-size:12px;font-family:‘Special Elite’,cursive;
+width:100%;background:var(--sf);border:1px solid var(--bdr);border-radius:5px;
+color:var(--tx);padding:9px 11px;font-size:12px;font-family:'Special Elite',cursive;
 outline:none;transition:border-color .15s;
 }
 .txin:focus{border-color:#444}
 .txin-sm{
-width:100%;background:var(–sf);border:1px solid var(–bdr);border-radius:5px;
-color:var(–tx);padding:8px 11px;font-size:12px;font-family:‘Noto Serif SC’,serif;
+width:100%;background:var(--sf);border:1px solid var(--bdr);border-radius:5px;
+color:var(--tx);padding:8px 11px;font-size:12px;font-family:'Noto Serif SC',serif;
 outline:none;transition:border-color .15s;margin-bottom:6px;
 }
 .txin-sm:focus{border-color:#444}
 .txin-sm::placeholder,.txin::placeholder{color:#444}
 .txin-sm:last-child{margin-bottom:0}
-
 /* divider */
-.div{height:1px;background:var(–bdr);margin:14px 0}
-
+.div{height:1px;background:var(--bdr);margin:14px 0}
 /* section spacing */
 .sec{margin-bottom:16px}
-
 /* poster hidden */
 .poster-section{display:none}
 .poster-section.visible{display:block}
 </style>
-
 </head>
 <body>
-
 <!-- HEADER -->
-
 <header>
   <span class="logo">135 FILM</span>
   <span class="logo-sub">胶片拼图</span>
@@ -233,9 +220,7 @@ outline:none;transition:border-color .15s;margin-bottom:6px;
     <button class="hbtn hbtn-exp" id="expb" onclick="exportPNG()" disabled>↓ 导出</button>
   </div>
 </header>
-
 <!-- CANVAS AREA -->
-
 <div class="ca" id="ca">
   <div class="ph" id="ph">
     <div class="phi">🎞</div>
@@ -244,37 +229,32 @@ outline:none;transition:border-color .15s;margin-bottom:6px;
   </div>
   <canvas id="cv" style="display:none"></canvas>
 </div>
-
 <!-- BOTTOM SHEET -->
-
 <div class="sheet-wrap">
   <div class="sheet" id="sheet">
     <div class="sheet-handle-row" id="sheetHandle">
       <div class="sheet-handle"></div>
       <div class="sheet-tabs" id="sheetTabs">
-        <div class="stab act" data-panel="upload" onclick="switchTab(this)">📷 照片</div>
-        <div class="stab" data-panel="mode" onclick="switchTab(this)">🎞 模式</div>
-        <div class="stab" data-panel="film" onclick="switchTab(this)">🎬 胶卷头</div>
-        <div class="stab" data-panel="tone" onclick="switchTab(this)">🎨 色调</div>
-        <div class="stab" data-panel="layout" onclick="switchTab(this)">⚙️ 布局</div>
+        <div class="stab act" data-panel="upload" onclick="switchTab(event,this)">📷 照片</div>
+        <div class="stab" data-panel="mode" onclick="switchTab(event,this)">🎞 模式</div>
+        <div class="stab" data-panel="film" onclick="switchTab(event,this)">🎬 胶卷头</div>
+        <div class="stab" data-panel="tone" onclick="switchTab(event,this)">🎨 色调</div>
+        <div class="stab" data-panel="layout" onclick="switchTab(event,this)">⚙️ 布局</div>
       </div>
     </div>
     <div class="sheet-body">
-
-```
-  <!-- PANEL: 照片 -->
+  <!-- PANEL: 照片 - 改用Label包裹 -->
   <div class="panel active" id="panel-upload">
-    <span class="lbl">上传照片 <span style="color:#555;font-size:9px;letter-spacing:0;text-transform:none">（8–36张）</span></span>
-    <div class="upz" id="uz">
-      <input type="file" id="fi" multiple accept="image/*">
+    <span class="lbl">上传照片 <span style="color:#555;font-size:9px;letter-spacing:0;text-transform:none">（8–36张，支持JPG/PNG/WebP）</span></span>
+    <label class="upz" id="uz">
+      <input type="file" id="fi" multiple accept="image/*,image/jpeg,image/png,image/webp">
       <div style="font-size:22px;margin-bottom:4px;opacity:.45">📷</div>
-      <div class="up-txt">点击上传<br>JPG · PNG · HEIC · WEBP</div>
+      <div class="up-txt">点击/拖拽上传<br>JPG · PNG · WebP</div>
       <div class="up-cnt" id="ucnt">0 / 36 张</div>
-    </div>
+    </label>
     <div class="up-err" id="uerr"></div>
     <div class="tgrid" id="tg"></div>
   </div>
-
   <!-- PANEL: 模式 -->
   <div class="panel" id="panel-mode">
     <div class="sec">
@@ -320,13 +300,11 @@ outline:none;transition:border-color .15s;margin-bottom:6px;
       </div>
     </div>
   </div>
-
   <!-- PANEL: 胶卷头 -->
   <div class="panel" id="panel-film">
     <span class="lbl">胶卷头款式</span>
     <div class="lgrid" id="lgrid"></div>
   </div>
-
   <!-- PANEL: 色调 -->
   <div class="panel" id="panel-tone">
     <div class="sec">
@@ -350,7 +328,6 @@ outline:none;transition:border-color .15s;margin-bottom:6px;
       </div>
     </div>
   </div>
-
   <!-- PANEL: 布局 -->
   <div class="panel" id="panel-layout">
     <div class="sec">
@@ -367,13 +344,9 @@ outline:none;transition:border-color .15s;margin-bottom:6px;
       <input class="txin" id="datin" placeholder="2024  SUMMER" maxlength="24">
     </div>
   </div>
-
 </div><!-- /sheet-body -->
-```
-
   </div><!-- /sheet -->
 </div><!-- /sheet-wrap -->
-
 <script>
 'use strict';
 // ═══════════════════════════════
@@ -385,24 +358,28 @@ let outputMode = 'filmroll';
 let preset = 'none';
 let intensity = 60;
 let leaderIdx = 0;
-let dragSrc = null;
+let isProcessing = false;
 
-// ── SHEET TOGGLE ──
+// ── SHEET TOGGLE + 标签页事件冲突修复 ──
 const sheet = document.getElementById('sheet');
 const sheetHandle = document.getElementById('sheetHandle');
 let sheetOpen = false;
-sheetHandle.addEventListener('click', () => {
+
+sheetHandle.addEventListener('click', (e) => {
+  // 只有点击handle-row的空白部分才触发抽屉
+  if (e.target.closest('.sheet-tabs')) return;
   sheetOpen = !sheetOpen;
   sheet.classList.toggle('open', sheetOpen);
 });
 
-function switchTab(el) {
+function switchTab(e, el) {
+  e.stopPropagation(); // 阻止事件冒泡到抽屉触发区域
   document.querySelectorAll('.stab').forEach(t => t.classList.remove('act'));
   el.classList.add('act');
   const panelId = 'panel-' + el.dataset.panel;
   document.querySelectorAll('.panel').forEach(p => p.classList.remove('active'));
   document.getElementById(panelId).classList.add('active');
-  // auto-open sheet
+  // 自动打开抽屉
   if (!sheetOpen) { sheetOpen = true; sheet.classList.add('open'); }
 }
 
@@ -431,45 +408,271 @@ const LAND={
 };
 
 // ═══════════════════════════════
-// UPLOAD
+// 轻量级EXIF旋转读取（仅手机端核心需求）
+// ═══════════════════════════════
+function getExifOrientation(file) {
+  return new Promise((resolve) => {
+    const reader = new FileReader();
+    reader.onload = (e) => {
+      const view = new DataView(e.target.result);
+      if (view.getUint16(0, false) !== 0xFFD8) return resolve(1); // 不是JPG
+      let offset = 2;
+      while (offset < view.byteLength) {
+        const marker = view.getUint16(offset, false);
+        offset += 2;
+        if (marker === 0xFFE1) { // APP1标记
+          if (view.getUint32(offset + 2, false) !== 0x45786966) return resolve(1); // 不是EXIF
+          const little = view.getUint16(offset + 8, false) === 0x4949;
+          offset += 10;
+          const tags = view.getUint16(offset, little);
+          offset += 2;
+          for (let i = 0; i < tags; i++) {
+            if (view.getUint16(offset + (i * 12), little) === 0x0112) {
+              return resolve(view.getUint16(offset + (i * 12) + 8, little));
+            }
+          }
+          return resolve(1);
+        } else if ((marker & 0xFF00) !== 0xFF00) {
+          break;
+        } else {
+          offset += view.getUint16(offset, false);
+        }
+      }
+      return resolve(1);
+    };
+    reader.onerror = () => resolve(1);
+    reader.readAsArrayBuffer(file.slice(0, 65536)); // 只读取前64KB足够
+  });
+}
+
+// ═══════════════════════════════
+// UPLOAD - 手机端彻底优化版
 // ═══════════════════════════════
 const uz=document.getElementById('uz');
 const fi=document.getElementById('fi');
-fi.addEventListener('change',e=>addFiles(e.target.files));
-uz.addEventListener('dragover',e=>{e.preventDefault();uz.classList.add('dov')});
-uz.addEventListener('dragleave',()=>uz.classList.remove('dov'));
-uz.addEventListener('drop',e=>{e.preventDefault();uz.classList.remove('dov');addFiles(e.dataTransfer.files)});
-function setErr(msg){document.getElementById('uerr').textContent=msg}
-function addFiles(files){
+
+// 不再需要uz的click事件，Label已接管
+// 但保留拖拽功能（主要针对平板/桌面，手机也有部分支持）
+uz.addEventListener('dragover', e => {
+  e.preventDefault();
+  e.stopPropagation();
+  uz.classList.add('dov');
+});
+
+uz.addEventListener('dragleave', e => {
+  e.preventDefault();
+  e.stopPropagation();
+  uz.classList.remove('dov');
+});
+
+uz.addEventListener('drop', e => {
+  e.preventDefault();
+  e.stopPropagation();
+  uz.classList.remove('dov');
+  if (e.dataTransfer.files.length > 0) {
+    addFiles(e.dataTransfer.files);
+  }
+});
+
+// 只监听fi的change事件
+fi.addEventListener('change', e => {
+  if (e.target.files.length > 0) {
+    addFiles(e.target.files);
+  }
+});
+
+function setErr(msg){
+  document.getElementById('uerr').textContent = msg;
+  if (msg) {
+    setTimeout(() => {
+      if (document.getElementById('uerr').textContent === msg) {
+        document.getElementById('uerr').textContent = '';
+      }
+    }, 5000);
+  }
+}
+
+async function addFiles(files){
+  if (isProcessing) {
+    setErr('正在处理图片，请稍候...');
+    return;
+  }
+  
   setErr('');
-  const arr=Array.from(files).filter(f=>f.type.startsWith('image/'));
-  let waiting=0;
-  arr.forEach(f=>{
-    if(photos.length+waiting>=36){setErr('最多36张，多余已忽略');return}
-    waiting++;
-    const url=URL.createObjectURL(f);
-    const img=new Image();
-    img.onload=()=>{
-      photos.push({raw:img,canvas:normalizeImg(img,'mid'),name:f.name,crop:'mid'});
-      URL.revokeObjectURL(url);waiting--;renderThumbs();
+  const arr = Array.from(files).filter(f => {
+    // 更宽松但兼容的文件类型检查
+    if (!f.type.startsWith('image/')) {
+      setErr(`已跳过不支持的文件: ${f.name}`);
+      return false;
+    }
+    return true;
+  });
+  
+  if (arr.length === 0) {
+    setErr('没有选择有效的图片文件');
+    return;
+  }
+  
+  isProcessing = true;
+  const originalCount = photos.length;
+  let loadedCount = 0;
+  let failedCount = 0;
+  
+  // 更新上传区域状态
+  const upTxt = uz.querySelector('.up-txt');
+  const originalUpText = upTxt.innerHTML;
+  upTxt.innerHTML = '正在处理图片...<br>请稍候';
+  
+  const maxToAdd = Math.min(arr.length, 36 - originalCount);
+  
+  if (originalCount + arr.length > 36) {
+    setErr('最多36张，多余已忽略');
+  }
+  
+  for (let i = 0; i < maxToAdd; i++) {
+    try {
+      const orientation = await getExifOrientation(arr[i]);
+      const result = await loadImage(arr[i], orientation);
+      if (result) {
+        photos.push(result);
+        loadedCount++;
+      } else {
+        failedCount++;
+      }
+    } catch (e) {
+      failedCount++;
+      console.error('Error loading image:', e);
+    }
+    
+    // 每加载一张更新一次界面
+    renderThumbs();
+  }
+  
+  // 恢复状态
+  isProcessing = false;
+  upTxt.innerHTML = originalUpText;
+  fi.value = ''; // 重置文件输入，允许再次选择相同文件
+  
+  if (failedCount > 0) {
+    setErr(`${failedCount} 张图片加载失败`);
+  }
+}
+
+// 添加orientation参数处理旋转
+function loadImage(file, orientation) {
+  return new Promise((resolve) => {
+    const url = URL.createObjectURL(file);
+    const img = new Image();
+    
+    const timeoutId = setTimeout(() => {
+      URL.revokeObjectURL(url);
+      resolve(null);
+    }, 15000); // 手机端延长超时时间
+    
+    img.onload = () => {
+      clearTimeout(timeoutId);
+      try {
+        const canvas = normalizeImg(img, 'mid', undefined, orientation);
+        URL.revokeObjectURL(url);
+        resolve({
+          raw: img,
+          canvas: canvas,
+          name: file.name,
+          crop: 'mid',
+          orientation: orientation // 保存后续重新裁剪用
+        });
+      } catch (e) {
+        URL.revokeObjectURL(url);
+        resolve(null);
+      }
     };
-    img.onerror=()=>{waiting--;URL.revokeObjectURL(url)};
-    img.src=url;
+    
+    img.onerror = () => {
+      clearTimeout(timeoutId);
+      URL.revokeObjectURL(url);
+      resolve(null);
+    };
+    
+    img.src = url;
   });
 }
-function normalizeImg(src,crop,targetAsp){
+
+// 添加orientation参数处理旋转
+function normalizeImg(src,crop,targetAsp,orientation){
   if(targetAsp===undefined) targetAsp=filmMode==='portrait'?(2/3):(3/2);
   const TW=filmMode==='portrait'?400:600;
   const TH=Math.round(TW/targetAsp);
   const c=document.createElement('canvas');c.width=TW;c.height=TH;
   const ctx=c.getContext('2d');
   ctx.fillStyle='#111';ctx.fillRect(0,0,TW,TH);
-  const sw=src.naturalWidth||src.width,sh=src.naturalHeight||src.height;
-  const sAsp=sw/sh;let srcX=0,srcY=0,srcW=sw,srcH=sh;
+  
+  // 处理EXIF旋转
+  let sw=src.naturalWidth||src.width,sh=src.naturalHeight||src.height;
+  let srcX=0,srcY=0,srcW=sw,srcH=sh;
+  const sAsp=sw/sh;
+  
+  // 先裁剪再旋转，或者先旋转再裁剪？这里先确定裁剪区域，再用变换矩阵处理
   if(sAsp>targetAsp){srcW=sh*targetAsp;srcX=(sw-srcW)/2}
   else{srcH=sw/targetAsp;const spare=sh-srcH;srcY=crop==='top'?0:crop==='bot'?spare:spare/2}
-  ctx.drawImage(src,srcX,srcY,srcW,srcH,0,0,TW,TH);return c;
+  
+  // 应用变换
+  ctx.save();
+  switch(orientation){
+    case 2: // 水平翻转
+      ctx.translate(TW, 0);
+      ctx.scale(-1, 1);
+      break;
+    case 3: // 180度旋转
+      ctx.translate(TW, TH);
+      ctx.rotate(Math.PI);
+      break;
+    case 4: // 垂直翻转
+      ctx.translate(0, TH);
+      ctx.scale(1, -1);
+      break;
+    case 5: // 水平翻转+270度旋转
+      ctx.rotate(0.5 * Math.PI);
+      ctx.scale(1, -1);
+      break;
+    case 6: // 270度旋转（最常见的手机竖拍）
+      ctx.rotate(0.5 * Math.PI);
+      ctx.translate(0, -TH);
+      // 注意：旋转后宽高要交换
+      const tempTW = TW;
+      const tempTH = TH;
+      c.width = tempTH;
+      c.height = tempTW;
+      ctx.restore();
+      ctx.save();
+      ctx.rotate(0.5 * Math.PI);
+      ctx.translate(0, -c.height);
+      break;
+    case 7: // 水平翻转+90度旋转
+      ctx.rotate(-0.5 * Math.PI);
+      ctx.translate(-TW, 0);
+      ctx.scale(1, -1);
+      break;
+    case 8: // 90度旋转
+      ctx.rotate(-0.5 * Math.PI);
+      ctx.translate(-TW, 0);
+      // 注意：旋转后宽高要交换
+      const tempTW2 = TW;
+      const tempTH2 = TH;
+      c.width = tempTH2;
+      c.height = tempTW2;
+      ctx.restore();
+      ctx.save();
+      ctx.rotate(-0.5 * Math.PI);
+      ctx.translate(-c.width, 0);
+      break;
+  }
+  
+  // 绘制
+  ctx.drawImage(src,srcX,srcY,srcW,srcH,0,0,c.width,c.height);
+  ctx.restore();
+  return c;
 }
+
 function renderThumbs(){
   const grid=document.getElementById('tg');grid.innerHTML='';
   const cnt=document.getElementById('ucnt');
@@ -488,13 +691,12 @@ function renderThumbs(){
       const b=document.createElement('button');
       b.className='cbtn'+(p.crop===c?' act':'');
       b.textContent=c==='top'?'上':c==='mid'?'中':'下';
-      b.onclick=()=>{p.crop=c;p.canvas=normalizeImg(p.raw,c);renderThumbs()};
+      b.onclick=()=>{p.crop=c;p.canvas=normalizeImg(p.raw,c,undefined,p.orientation);renderThumbs()};
       crow.appendChild(b);
     });
     wrap.append(thumb,crow);grid.appendChild(wrap);
   });
 }
-
 // ═══════════════════════════════
 // CONTROLS
 // ═══════════════════════════════
@@ -509,7 +711,7 @@ function selOutMode(btn){
 function selMode(btn){
   document.querySelectorAll('.mode-btn').forEach(b=>b.classList.remove('act'));
   btn.classList.add('act');filmMode=btn.dataset.m;
-  photos.forEach(p=>{p.canvas=normalizeImg(p.raw,p.crop)});renderThumbs();
+  photos.forEach(p=>{p.canvas=normalizeImg(p.raw,p.crop,undefined,p.orientation)});renderThumbs();
 }
 function selPreset(btn){
   document.querySelectorAll('.pbtn').forEach(b=>b.classList.remove('act'));
@@ -520,7 +722,6 @@ function selInt(btn){
   document.querySelectorAll('.ibtn').forEach(b=>b.classList.remove('act'));
   btn.classList.add('act');intensity=parseInt(btn.dataset.v);
 }
-
 // ═══════════════════════════════
 // LEADER THUMBNAILS
 // ═══════════════════════════════
@@ -547,7 +748,6 @@ function initLeaderGrid(){
     opt.append(c,nm);grid.appendChild(opt);
   });
 }
-
 // ═══════════════════════════════
 // CANVAS UTILITIES
 // ═══════════════════════════════
@@ -591,7 +791,6 @@ function sketchStroke(ctx,x,y,w,h,r,col,lw){
   ctx.lineTo(x+r+j(),y+h+j());ctx.quadraticCurveTo(x+j(),y+h+j(),x+j(),y+h-r+j());
   ctx.lineTo(x+j(),y+r+j());ctx.quadraticCurveTo(x+j(),y+j(),x+r+j(),y+j());ctx.closePath();ctx.stroke();ctx.restore();
 }
-
 // ═══════════════════════════════
 // LEADER DRAWERS
 // ═══════════════════════════════
@@ -642,7 +841,6 @@ function ldrGold100(ctx,x,y,w,h,isPreview){
   const pr=PRESETS[preset]||PRESETS.none;const tg=tongue(x,y,w,h);ctx.fillStyle=pr.filmBg;ctx.fillRect(x,y,w,h);drawPerfs(ctx,x,y,w,tg.hz,pr);drawPerfs(ctx,x,y+h-tg.hz,w,tg.hz,pr);
   ctx.save();clipTongue(ctx,x,y,w,h);ctx.clip();const{tx,ty,tw,th}=tg;sketchy(ctx,tx,ty,tw,th,'#c8940a','rgba(0,0,0,0.22)');ctx.fillStyle='#111';ctx.textAlign='left';ctx.font=`bold ${th*0.11}px monospace`;ctx.fillText('DX',tx+tw*0.05,ty+th*0.14);ctx.fillText('GA',tx+tw*0.05,ty+th*0.26);ctx.textAlign='center';ctx.font=`bold ${th*0.22}px 'Special Elite',cursive`;ctx.fillText('kodak',tx+tw/2,ty+th*0.4);ctx.font=`bold ${th*0.28}px 'Special Elite',cursive`;ctx.fillText('GOLD',tx+tw/2,ty+th*0.63);ctx.font=`bold ${th*0.22}px monospace`;ctx.fillText('100',tx+tw/2,ty+th*0.83);ctx.font=`${th*0.1}px monospace`;ctx.fillStyle='rgba(0,0,0,0.45)';ctx.textAlign='right';ctx.fillText('36exp.',tx+tw*0.96,ty+th*0.95);ctx.restore();
 }
-
 // ═══════════════════════════════
 // CANISTER
 // ═══════════════════════════════
@@ -663,7 +861,6 @@ function drawCanister(ctx,x,y,w,h){
   hlGrad.addColorStop(0,'rgba(255,255,255,0)');hlGrad.addColorStop(0.5,'rgba(255,255,255,0.12)');hlGrad.addColorStop(1,'rgba(255,255,255,0)');
   ctx.fillStyle=hlGrad;ctx.fillRect(hlx,by+bh*0.05,hlw,bh*0.9);
 }
-
 // ═══════════════════════════════
 // IMAGE PROCESSING
 // ═══════════════════════════════
@@ -687,7 +884,6 @@ function applyLook(src,pr,intPct){
   if(gr>0){const gd=ctx.createImageData(w,h);for(let i=0;i<gd.data.length;i+=4){const v=(Math.random()-.5)*gr;gd.data[i]=128+v;gd.data[i+1]=128+v;gd.data[i+2]=128+v;gd.data[i+3]=16}const gc=document.createElement('canvas');gc.width=w;gc.height=h;gc.getContext('2d').putImageData(gd,0,0);ctx.globalCompositeOperation='overlay';ctx.drawImage(gc,0,0);ctx.globalCompositeOperation='source-over'}
   return out;
 }
-
 // ═══════════════════════════════
 // DRAW FILM STRIP ROW
 // ═══════════════════════════════
@@ -713,7 +909,6 @@ function drawFilmStripRow(ctx,row,rows,rowPhotos,stripX,y,fps,STRIP_W,STRIP_H,FR
   const ldrName=LEADERS[leaderIdx].name.replace('\n',' ').toUpperCase();
   ctx.font=`${Math.round(PERF_H*0.4)}px monospace`;ctx.fillStyle='rgba(255,255,255,0.18)';ctx.textAlign='left';ctx.fillText(ldrName,stripX+EDGE,y+PERF_H*0.55);
 }
-
 // ═══════════════════════════════
 // GENERATE POSTER
 // ═══════════════════════════════
@@ -754,7 +949,6 @@ function generatePoster(){
   }
   document.getElementById('ph').style.display='none';cv.style.display='block';document.getElementById('expb').disabled=false;
 }
-
 // ═══════════════════════════════
 // GENERATE FILM ROLL
 // ═══════════════════════════════
@@ -795,7 +989,6 @@ function generateFilmRoll(){
   ctx.fillText(filmName+(dateStr?' · '+dateStr:''),ox+LEFT_PAD+STRIP_W/2,contentY+10);
   document.getElementById('ph').style.display='none';cv.style.display='block';document.getElementById('expb').disabled=false;
 }
-
 // ═══════════════════════════════
 // GENERATE DISPATCHER
 // ═══════════════════════════════
@@ -808,7 +1001,6 @@ function generate(){
   sheetOpen=false;sheet.classList.remove('open');
   if(outputMode==='poster')generatePoster();else generateFilmRoll();
 }
-
 // ═══════════════════════════════
 // EXPORT
 // ═══════════════════════════════
@@ -818,13 +1010,11 @@ function exportPNG(){
   const name=outputMode==='poster'?`film-poster-${Date.now()}.png`:`film-${filmMode}-${LEADERS[leaderIdx].name.replace(/\n/g,'-').replace(/\s+/g,'')}-${Date.now()}.png`;
   const a=document.createElement('a');a.download=name;a.href=cv.toDataURL('image/png');a.click();
 }
-
 // ═══════════════════════════════
 // INIT
 // ═══════════════════════════════
 initLeaderGrid();
 renderThumbs();
 </script>
-
 </body>
 </html>
