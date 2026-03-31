@@ -18,7 +18,7 @@ html,body{height:100%;overflow:hidden}
 body{background:var(--bg);color:var(--tx);font-family:'Noto Serif SC',serif;display:flex;flex-direction:column}
 /* ── 移动端核心交互优化 ── */
 button, .stab, .sheet-handle-row, .lopt, .cbtn, .pbtn, .ibtn, .mode-btn, .outmode-btn{
-  touch-action: manipulation;
+  touch-action: manipulation; /* 直接取消300ms延迟 */
   user-select: none;
   -webkit-user-select: none;
 }
@@ -54,7 +54,7 @@ gap:12px;color:var(--txd);text-align:center;margin:auto;
 .phi{font-size:48px;opacity:.18}
 .pht{font-size:14px;color:#444}
 .phs{font-size:11px;line-height:1.9;opacity:.55;max-width:260px}
-#cv{display:block;max-width:100%;height:auto;box-shadow:0 6px 40px rgba(0,0,0,.8);border-radius:2px}
+#cv{display:block;max-width:100%;height:auto;box-shadow:0 6px 40px rgba(0,0,0,.8);border-radius:2px;object-fit:contain}
 /* ── BOTTOM SHEET ── */
 .sheet-wrap{
 position:fixed;bottom:0;left:0;right:0;z-index:100;
@@ -104,6 +104,7 @@ text-align:center;cursor:pointer;position:relative;background:var(--sf);
 transition:all .15s;display:block;width:100%;
 }
 .upz.dov{border-color:var(--amber);background:rgba(200,136,42,.06)}
+/* 隐藏但不占位置，Label全权接管 */
 .upz input{position:absolute;opacity:0;visibility:hidden;pointer-events:none;width:0;height:0}
 .up-txt{font-size:11px;color:var(--txd);line-height:1.6}
 .up-cnt{font-size:11px;color:var(--amber);margin-top:4px;font-weight:600}
@@ -119,12 +120,17 @@ background:rgba(0,0,0,.8);border:none;border-radius:50%;
 color:#fff;font-size:10px;cursor:pointer;display:flex;align-items:center;justify-content:center;
 }
 .croprow{display:flex;gap:2px}
-.cbtn, .rbtn{
+.rotbtn{
+padding:2px 0;font-size:9px;background:var(--sf2);
+border:1px solid var(--bdr);border-radius:2px;color:var(--txd);
+cursor:pointer;text-align:center;font-family:inherit;transition:all .12s;flex:0 0 28px;
+}
+.cbtn{
 flex:1;padding:2px 0;font-size:8px;background:var(--sf2);
 border:1px solid var(--bdr);border-radius:2px;color:var(--txd);
 cursor:pointer;text-align:center;font-family:inherit;transition:all .12s;
 }
-.cbtn.act, .rbtn:active{background:rgba(200,136,42,.15);border-color:var(--amber);color:var(--amber)}
+.cbtn.act{background:rgba(200,136,42,.15);border-color:var(--amber);color:var(--amber)}
 /* mode row */
 .mode-row{display:flex;gap:6px}
 .mode-btn{
@@ -245,7 +251,7 @@ outline:none;transition:border-color .15s;margin-bottom:6px;
       </div>
     </div>
     <div class="sheet-body">
-  <!-- PANEL: 照片 -->
+  <!-- PANEL: 照片 - 改用Label包裹 -->
   <div class="panel active" id="panel-upload">
     <span class="lbl">上传照片 <span style="color:#555;font-size:9px;letter-spacing:0;text-transform:none">（8–36张，支持JPG/PNG/WebP）</span></span>
     <label class="upz" id="uz">
@@ -266,7 +272,7 @@ outline:none;transition:border-color .15s;margin-bottom:6px;
           <span class="omn">胶卷模式</span><span class="oms">含胶卷壳排版</span>
         </button>
         <button class="outmode-btn" data-om="poster" onclick="selOutMode(this)">
-          <span class="omn">海报模式</span><span class="oms">白底胶片框</span>
+          <span class="omn">海报模式</span><span class="oms">白底满幅海报</span>
         </button>
       </div>
     </div>
@@ -363,7 +369,20 @@ outline:none;transition:border-color .15s;margin-bottom:6px;
 <script>
 'use strict';
 // ═══════════════════════════════
-// STATE - 新增rotate:0
+// PREVIEW FIT HELPER
+// ═══════════════════════════════
+function fitCanvasPreview(cv, logicalW, logicalH){
+  const ca = document.getElementById('ca');
+  const maxW = ca.clientWidth - 32; // 16px padding each side
+  const maxH = ca.clientHeight - 32;
+  const scaleW = Math.min(1, maxW / logicalW);
+  const scaleH = Math.min(1, maxH / logicalH);
+  const scale = Math.min(scaleW, scaleH);
+  cv.style.width = Math.round(logicalW * scale) + 'px';
+  cv.style.height = Math.round(logicalH * scale) + 'px';
+}
+// ═══════════════════════════════
+// STATE
 // ═══════════════════════════════
 let photos = [];
 let filmMode = 'portrait';
@@ -373,8 +392,7 @@ let intensity = 60;
 let leaderIdx = 0;
 let isProcessing = false;
 
-// ── SHEET TOGGLE
-// ──────────────────────────────────────────────────────────
+// ── SHEET TOGGLE + 标签页事件冲突修复 ──
 const sheet = document.getElementById('sheet');
 const sheetHandle = document.getElementById('sheetHandle');
 let sheetOpen = false;
@@ -420,30 +438,24 @@ const LAND={
 };
 
 // ═══════════════════════════════
-// 布局UI动态切换
+// 布局UI动态切换（关键新增）
 // ═══════════════════════════════
 function updateLayoutUI(){
   const fpsr = document.getElementById('fpsr');
   const layoutLabel = document.getElementById('layoutLabel');
   const layoutMin = document.getElementById('layoutMin');
   
-  if(outputMode === 'poster'){
-    layoutLabel.textContent = '每列张数';
-    layoutMin.textContent = '1';
-    fpsr.min = '1';
-  } else {
-    layoutLabel.textContent = '每行帧数';
-    layoutMin.textContent = '3';
-    if(parseInt(fpsr.value) < 3){
-      fpsr.value = '3';
-      document.getElementById('fpsv').textContent = '3';
-    }
-    fpsr.min = '3';
+  layoutLabel.textContent = '每行帧数';
+  layoutMin.textContent = '3';
+  fpsr.min = '3';
+  if(parseInt(fpsr.value) < 3){
+    fpsr.value = '3';
+    document.getElementById('fpsv').textContent = '3';
   }
 }
 
 // ═══════════════════════════════
-// EXIF旋转读取
+// 轻量级EXIF旋转读取
 // ═══════════════════════════════
 function getExifOrientation(file) {
   return new Promise((resolve) => {
@@ -467,8 +479,11 @@ function getExifOrientation(file) {
             }
           }
           return resolve(1);
-        } else if ((marker & 0xFF00) !== 0xFF00) break;
-        else offset += view.getUint16(offset, false);
+        } else if ((marker & 0xFF00) !== 0xFF00) {
+          break;
+        } else {
+          offset += view.getUint16(offset, false);
+        }
       }
       return resolve(1);
     };
@@ -483,156 +498,211 @@ function getExifOrientation(file) {
 const uz=document.getElementById('uz');
 const fi=document.getElementById('fi');
 
-uz.addEventListener('dragover', e => {e.preventDefault();e.stopPropagation();uz.classList.add('dov');});
-uz.addEventListener('dragleave', e => {e.preventDefault();e.stopPropagation();uz.classList.remove('dov');});
-uz.addEventListener('drop', e => {
-  e.preventDefault();e.stopPropagation();uz.classList.remove('dov');
-  if (e.dataTransfer.files.length > 0) addFiles(e.dataTransfer.files);
+uz.addEventListener('dragover', e => {
+  e.preventDefault();
+  e.stopPropagation();
+  uz.classList.add('dov');
 });
-fi.addEventListener('change', e => { if (e.target.files.length > 0) addFiles(e.target.files); });
+
+uz.addEventListener('dragleave', e => {
+  e.preventDefault();
+  e.stopPropagation();
+  uz.classList.remove('dov');
+});
+
+uz.addEventListener('drop', e => {
+  e.preventDefault();
+  e.stopPropagation();
+  uz.classList.remove('dov');
+  if (e.dataTransfer.files.length > 0) {
+    addFiles(e.dataTransfer.files);
+  }
+});
+
+fi.addEventListener('change', e => {
+  if (e.target.files.length > 0) {
+    addFiles(e.target.files);
+  }
+});
 
 function setErr(msg){
   document.getElementById('uerr').textContent = msg;
-  if (msg) setTimeout(() => { if (document.getElementById('uerr').textContent === msg) document.getElementById('uerr').textContent = ''; }, 5000);
+  if (msg) {
+    setTimeout(() => {
+      if (document.getElementById('uerr').textContent === msg) {
+        document.getElementById('uerr').textContent = '';
+      }
+    }, 5000);
+  }
 }
 
 async function addFiles(files){
-  if (isProcessing) { setErr('正在处理图片，请稍候...'); return; }
+  if (isProcessing) {
+    setErr('正在处理图片，请稍候...');
+    return;
+  }
+  
   setErr('');
   const arr = Array.from(files).filter(f => {
-    if (!f.type.startsWith('image/')) { setErr(`已跳过不支持的文件: ${f.name}`); return false; }
+    if (!f.type.startsWith('image/')) {
+      setErr(`已跳过不支持的文件: ${f.name}`);
+      return false;
+    }
     return true;
   });
-  if (arr.length === 0) { setErr('没有选择有效的图片文件'); return; }
+  
+  if (arr.length === 0) {
+    setErr('没有选择有效的图片文件');
+    return;
+  }
   
   isProcessing = true;
+  const originalCount = photos.length;
+  let loadedCount = 0;
+  let failedCount = 0;
+  
   const upTxt = uz.querySelector('.up-txt');
   const originalUpText = upTxt.innerHTML;
   upTxt.innerHTML = '正在处理图片...<br>请稍候';
   
-  const maxToAdd = Math.min(arr.length, 36 - photos.length);
-  if (photos.length + arr.length > 36) setErr('最多36张，多余已忽略');
+  const maxToAdd = Math.min(arr.length, 36 - originalCount);
+  
+  if (originalCount + arr.length > 36) {
+    setErr('最多36张，多余已忽略');
+  }
   
   for (let i = 0; i < maxToAdd; i++) {
     try {
       const orientation = await getExifOrientation(arr[i]);
       const result = await loadImage(arr[i], orientation);
-      if (result) photos.push(result);
-    } catch (e) { console.error(e); }
+      if (result) {
+        photos.push(result);
+        loadedCount++;
+      } else {
+        failedCount++;
+      }
+    } catch (e) {
+      failedCount++;
+      console.error('Error loading image:', e);
+    }
     renderThumbs();
   }
   
   isProcessing = false;
   upTxt.innerHTML = originalUpText;
   fi.value = '';
+  
+  if (failedCount > 0) {
+    setErr(`${failedCount} 张图片加载失败`);
+  }
 }
 
-function loadImage(file, exifOrientation) {
+function loadImage(file, orientation) {
   return new Promise((resolve) => {
     const url = URL.createObjectURL(file);
     const img = new Image();
-    const timeoutId = setTimeout(() => { URL.revokeObjectURL(url); resolve(null); }, 15000);
+    
+    const timeoutId = setTimeout(() => {
+      URL.revokeObjectURL(url);
+      resolve(null);
+    }, 15000);
     
     img.onload = () => {
       clearTimeout(timeoutId);
       try {
-        // 新增：exifRotation 映射到内部 rotate (0,90,180,270)
-        let internalRotate = 0;
-        switch(exifOrientation){
-          case 3: internalRotate = 180; break;
-          case 6: internalRotate = 90; break;
-          case 8: internalRotate = 270; break;
-        }
-        
-        const canvas = normalizeImg(img, 'mid', undefined, internalRotate);
+        const canvas = normalizeImg(img, 'mid', undefined, orientation);
         URL.revokeObjectURL(url);
         resolve({
           raw: img,
           canvas: canvas,
           name: file.name,
           crop: 'mid',
-          exifOrientation: exifOrientation,
-          rotate: internalRotate // 新增：存储旋转角度
+          rotate: 0,
+          orientation: orientation
         });
-      } catch (e) { URL.revokeObjectURL(url); resolve(null); }
+      } catch (e) {
+        URL.revokeObjectURL(url);
+        resolve(null);
+      }
     };
-    img.onerror = () => { clearTimeout(timeoutId); URL.revokeObjectURL(url); resolve(null); };
+    
+    img.onerror = () => {
+      clearTimeout(timeoutId);
+      URL.revokeObjectURL(url);
+      resolve(null);
+    };
+    
     img.src = url;
   });
 }
 
-// ═══════════════════════════════
-// 核心修复：normalizeImg 支持旋转，预览/下载统一用这个
-// ═══════════════════════════════
-function normalizeImg(src, crop, targetAsp, rotate){
+function normalizeImg(src,crop,targetAsp,orientation,userRotate){
   if(targetAsp===undefined) targetAsp=filmMode==='portrait'?(2/3):(3/2);
+  if(userRotate===undefined) userRotate=0;
   const TW=filmMode==='portrait'?400:600;
   const TH=Math.round(TW/targetAsp);
+  const c=document.createElement('canvas');c.width=TW;c.height=TH;
+  const ctx=c.getContext('2d');
+  ctx.fillStyle='#111';ctx.fillRect(0,0,TW,TH);
   
-  // 先创建临时画布处理旋转
-  const tempC = document.createElement('canvas');
-  const tempCtx = tempC.getContext('2d');
+  // First draw the source image with EXIF correction into a temp canvas
+  const tmp=document.createElement('canvas');
+  let sw=src.naturalWidth||src.width,sh=src.naturalHeight||src.height;
+  tmp.width=sw;tmp.height=sh;
+  const tctx=tmp.getContext('2d');
+  tctx.drawImage(src,0,0);
   
-  let srcW=src.naturalWidth||src.width, srcH=src.naturalHeight||src.height;
-  let finalW = TW, finalH = TH;
-  
-  // 根据旋转角度调整临时画布尺寸和最终裁剪比例的方向
-  let effectiveRotate = rotate % 360;
-  if(effectiveRotate < 0) effectiveRotate += 360;
-  
-  // 旋转后的临时画布
-  let tempW, tempH;
-  if(effectiveRotate === 90 || effectiveRotate === 270){
-    tempW = srcH;
-    tempH = srcW;
-  } else {
-    tempW = srcW;
-    tempH = srcH;
-  }
-  tempC.width = tempW;
-  tempC.height = tempH;
-  
-  // 绘制旋转后的图到临时画布
-  tempCtx.save();
-  tempCtx.translate(tempW/2, tempH/2);
-  tempCtx.rotate(effectiveRotate * Math.PI / 180);
-  tempCtx.drawImage(src, -srcW/2, -srcH/2);
-  tempCtx.restore();
-  
-  // 现在从临时画布裁剪，这样裁剪方向就是正确的
-  const c = document.createElement('canvas');
-  c.width = finalW;
-  c.height = finalH;
-  const ctx = c.getContext('2d');
-  ctx.fillStyle='#111';
-  ctx.fillRect(0,0,finalW,finalH);
-  
-  const sAsp = tempW / tempH;
-  let sx=0, sy=0, sw=tempW, sh=tempH;
-  
-  if(sAsp > targetAsp){
-    sw = tempH * targetAsp;
-    sx = (tempW - sw)/2;
-  } else {
-    sh = tempW / targetAsp;
-    const spare = tempH - sh;
-    sy = crop==='top'?0:crop==='bot'?spare:spare/2;
+  // Apply EXIF orientation to tmp
+  if(orientation && orientation>1){
+    const tc2=document.createElement('canvas');
+    const rotated=[5,6,7,8].includes(orientation);
+    tc2.width=rotated?sh:sw;tc2.height=rotated?sw:sh;
+    const tctx2=tc2.getContext('2d');
+    switch(orientation){
+      case 2:tctx2.translate(tc2.width,0);tctx2.scale(-1,1);break;
+      case 3:tctx2.translate(tc2.width,tc2.height);tctx2.rotate(Math.PI);break;
+      case 4:tctx2.translate(0,tc2.height);tctx2.scale(1,-1);break;
+      case 5:tctx2.rotate(0.5*Math.PI);tctx2.scale(1,-1);break;
+      case 6:tctx2.rotate(0.5*Math.PI);tctx2.translate(0,-tc2.height);break;
+      case 7:tctx2.rotate(-0.5*Math.PI);tctx2.translate(-tc2.width,0);tctx2.scale(1,-1);break;
+      case 8:tctx2.rotate(-0.5*Math.PI);tctx2.translate(-tc2.width,0);break;
+    }
+    tctx2.drawImage(tmp,0,0);
+    sw=tc2.width;sh=tc2.height;
+    tmp.width=sw;tmp.height=sh;
+    tmp.getContext('2d').drawImage(tc2,0,0);
   }
   
-  ctx.drawImage(tempC, sx, sy, sw, sh, 0, 0, finalW, finalH);
+  // Apply user rotation (0,90,180,270)
+  if(userRotate!==0){
+    const ur=((userRotate%360)+360)%360;
+    const tc3=document.createElement('canvas');
+    const swap=(ur===90||ur===270);
+    tc3.width=swap?sh:sw;tc3.height=swap?sw:sh;
+    const tctx3=tc3.getContext('2d');
+    tctx3.translate(tc3.width/2,tc3.height/2);
+    tctx3.rotate(ur*Math.PI/180);
+    tctx3.drawImage(tmp,-sw/2,-sh/2);
+    sw=tc3.width;sh=tc3.height;
+    tmp.width=sw;tmp.height=sh;
+    tmp.getContext('2d').drawImage(tc3,0,0);
+  }
+  
+  // Crop and draw into final canvas
+  const sAsp=sw/sh;
+  let srcX=0,srcY=0,srcW=sw,srcH=sh;
+  if(sAsp>targetAsp){srcW=sh*targetAsp;srcX=(sw-srcW)/2}
+  else{srcH=sw/targetAsp;const spare=sh-srcH;srcY=crop==='top'?0:crop==='bot'?spare:spare/2}
+  ctx.drawImage(tmp,srcX,srcY,srcW,srcH,0,0,TW,TH);
   return c;
 }
 
-// ═══════════════════════════════
-// 核心修复：renderThumbs 加旋转按钮
-// ═══════════════════════════════
 function renderThumbs(){
   const grid=document.getElementById('tg');grid.innerHTML='';
   const cnt=document.getElementById('ucnt');
   cnt.textContent=`${photos.length} / 36 张`;
   cnt.style.color=photos.length<8?'#e05050':photos.length===36?'#e09020':'#c8882a';
   document.getElementById('genb').disabled=photos.length<8;
-  
   photos.forEach((p,i)=>{
     const wrap=document.createElement('div');wrap.className='twrap';
     const thumb=document.createElement('div');thumb.className='thumb';
@@ -640,37 +710,22 @@ function renderThumbs(){
     const del=document.createElement('button');del.className='tdel';del.textContent='×';
     del.onclick=e=>{e.stopPropagation();photos.splice(i,1);renderThumbs()};
     thumb.append(img,del);
-    
     const crow=document.createElement('div');crow.className='croprow';
-    // 上中下
     ['top','mid','bot'].forEach(c=>{
       const b=document.createElement('button');
       b.className='cbtn'+(p.crop===c?' act':'');
       b.textContent=c==='top'?'上':c==='mid'?'中':'下';
-      b.onclick=()=>{
-        p.crop=c;
-        p.canvas=normalizeImg(p.raw,c,undefined,p.rotate);
-        renderThumbs();
-      };
+      b.onclick=()=>{p.crop=c;p.canvas=normalizeImg(p.raw,c,undefined,p.orientation,p.rotate);renderThumbs()};
       crow.appendChild(b);
     });
-    // 旋转按钮
-    const rbtn=document.createElement('button');
-    rbtn.className='rbtn';
-    rbtn.textContent='↻';
-    rbtn.title='顺时针旋转90°';
-    rbtn.onclick=()=>{
-      p.rotate = (p.rotate + 90) % 360;
-      p.canvas=normalizeImg(p.raw,p.crop,undefined,p.rotate);
-      renderThumbs();
-    };
-    crow.appendChild(rbtn);
-    
-    wrap.append(thumb,crow);
-    grid.appendChild(wrap);
+    // Rotate button
+    const rb=document.createElement('button');
+    rb.className='rotbtn';rb.textContent='↻';rb.title='旋转90°';
+    rb.onclick=()=>{p.rotate=((p.rotate||0)+90)%360;p.canvas=normalizeImg(p.raw,p.crop,undefined,p.orientation,p.rotate);renderThumbs()};
+    crow.appendChild(rb);
+    wrap.append(thumb,crow);grid.appendChild(wrap);
   });
 }
-
 // ═══════════════════════════════
 // CONTROLS
 // ═══════════════════════════════
@@ -678,11 +733,13 @@ function selOutMode(btn){
   document.querySelectorAll('.outmode-btn').forEach(b=>b.classList.remove('act'));
   btn.classList.add('act');outputMode=btn.dataset.om;
   
+  // 动态显示/隐藏区域
   document.getElementById('filmroll-settings').classList.toggle('hidden', outputMode!=='filmroll');
   document.getElementById('poster-settings').classList.toggle('visible', outputMode==='poster');
   document.getElementById('dateSection').style.display=outputMode==='filmroll'?'':'none';
   document.getElementById('panel-film').style.display=outputMode==='filmroll'?'':'none';
   
+  // 切换版式按钮的文字
   const modeBtns = document.querySelectorAll('#panel-mode .mode-btn');
   if(outputMode === 'poster'){
     modeBtns[0].querySelector('.mn').textContent = '竖版照片';
@@ -692,14 +749,14 @@ function selOutMode(btn){
     modeBtns[1].querySelector('.mn').textContent = '横版';
   }
   
+  // 更新布局UI
   updateLayoutUI();
 }
 
 function selMode(btn){
   document.querySelectorAll('#panel-mode .mode-btn').forEach(b=>b.classList.remove('act'));
   btn.classList.add('act');filmMode=btn.dataset.m;
-  photos.forEach(p=>{p.canvas=normalizeImg(p.raw,p.crop,undefined,p.rotate)});
-  renderThumbs();
+  photos.forEach(p=>{p.canvas=normalizeImg(p.raw,p.crop,undefined,p.orientation,p.rotate)});renderThumbs();
 }
 
 function selPreset(btn){
@@ -712,7 +769,6 @@ function selInt(btn){
   document.querySelectorAll('.ibtn').forEach(b=>b.classList.remove('act'));
   btn.classList.add('act');intensity=parseInt(btn.dataset.v);
 }
-
 // ═══════════════════════════════
 // LEADER THUMBNAILS
 // ═══════════════════════════════
@@ -739,7 +795,6 @@ function initLeaderGrid(){
     opt.append(c,nm);grid.appendChild(opt);
   });
 }
-
 // ═══════════════════════════════
 // CANVAS UTILITIES
 // ═══════════════════════════════
@@ -783,7 +838,6 @@ function sketchStroke(ctx,x,y,w,h,r,col,lw){
   ctx.lineTo(x+r+j(),y+h+j());ctx.quadraticCurveTo(x+j(),y+h+j(),x+j(),y+h-r+j());
   ctx.lineTo(x+j(),y+r+j());ctx.quadraticCurveTo(x+j(),y+j(),x+r+j(),y+j());ctx.closePath();ctx.stroke();ctx.restore();
 }
-
 // ═══════════════════════════════
 // LEADER DRAWERS
 // ═══════════════════════════════
@@ -834,7 +888,6 @@ function ldrGold100(ctx,x,y,w,h,isPreview){
   const pr=PRESETS[preset]||PRESETS.none;const tg=tongue(x,y,w,h);ctx.fillStyle=pr.filmBg;ctx.fillRect(x,y,w,h);drawPerfs(ctx,x,y,w,tg.hz,pr);drawPerfs(ctx,x,y+h-tg.hz,w,tg.hz,pr);
   ctx.save();clipTongue(ctx,x,y,w,h);ctx.clip();const{tx,ty,tw,th}=tg;sketchy(ctx,tx,ty,tw,th,'#c8940a','rgba(0,0,0,0.22)');ctx.fillStyle='#111';ctx.textAlign='left';ctx.font=`bold ${th*0.11}px monospace`;ctx.fillText('DX',tx+tw*0.05,ty+th*0.14);ctx.fillText('GA',tx+tw*0.05,ty+th*0.26);ctx.textAlign='center';ctx.font=`bold ${th*0.22}px 'Special Elite',cursive`;ctx.fillText('kodak',tx+tw/2,ty+th*0.4);ctx.font=`bold ${th*0.28}px 'Special Elite',cursive`;ctx.fillText('GOLD',tx+tw/2,ty+th*0.63);ctx.font=`bold ${th*0.22}px monospace`;ctx.fillText('100',tx+tw/2,ty+th*0.83);ctx.font=`${th*0.1}px monospace`;ctx.fillStyle='rgba(0,0,0,0.45)';ctx.textAlign='right';ctx.fillText('36exp.',tx+tw*0.96,ty+th*0.95);ctx.restore();
 }
-
 // ═══════════════════════════════
 // CANISTER
 // ═══════════════════════════════
@@ -855,7 +908,6 @@ function drawCanister(ctx,x,y,w,h){
   hlGrad.addColorStop(0,'rgba(255,255,255,0)');hlGrad.addColorStop(0.5,'rgba(255,255,255,0.12)');hlGrad.addColorStop(1,'rgba(255,255,255,0)');
   ctx.fillStyle=hlGrad;ctx.fillRect(hlx,by+bh*0.05,hlw,bh*0.9);
 }
-
 // ═══════════════════════════════
 // IMAGE PROCESSING
 // ═══════════════════════════════
@@ -879,145 +931,68 @@ function applyLook(src,pr,intPct){
   if(gr>0){const gd=ctx.createImageData(w,h);for(let i=0;i<gd.data.length;i+=4){const v=(Math.random()-.5)*gr;gd.data[i]=128+v;gd.data[i+1]=128+v;gd.data[i+2]=128+v;gd.data[i+3]=16}const gc=document.createElement('canvas');gc.width=w;gc.height=h;gc.getContext('2d').putImageData(gd,0,0);ctx.globalCompositeOperation='overlay';ctx.drawImage(gc,0,0);ctx.globalCompositeOperation='source-over'}
   return out;
 }
-
 // ═══════════════════════════════
-// 绘制单条胶片（胶卷/海报模式通用核心）
-// ═══════════════════════════════
-function drawSingleStrip(ctx, stripX, y, stripW, stripH, frameW, frameH, perfH, pr, rowPhotos, globalFrame, isPoster){
-  // 胶片背景
-  ctx.fillStyle = isPoster ? '#2a2a2a' : pr.filmBg;
-  ctx.fillRect(stripX, y, stripW, stripH);
-  
-  // 齿孔
-  drawPerfs(ctx, stripX, y, stripW, perfH, isPoster ? {holeBg:'#f8f5ee'} : pr);
-  drawPerfs(ctx, stripX, y + stripH - perfH, stripW, perfH, isPoster ? {holeBg:'#f8f5ee'} : pr);
-  
-  // 照片和序号
-  for(let f=0; f<rowPhotos.length; f++){
-    const fx = stripX + EDGE + f * (frameW + GAP);
-    const fy = y + perfH;
-    const processed = applyLook(rowPhotos[f].canvas, pr, intensity);
-    ctx.save();
-    ctx.beginPath();
-    ctx.rect(fx, fy, frameW, frameH);
-    ctx.clip();
-    ctx.drawImage(processed, fx, fy, frameW, frameH);
-    ctx.restore();
-    
-    // 序号
-    ctx.fillStyle = isPoster ? 'rgba(255,255,255,0.35)' : 'rgba(255,255,255,0.22)';
-    ctx.font = `bold ${Math.round(stripH * 0.07)}px monospace`;
-    ctx.textAlign = 'center';
-    ctx.fillText((globalFrame + f + 1).toString(), fx + frameW/2, y + perfH - Math.round(perfH * 0.2));
-  }
-}
-
-// ═══════════════════════════════
-// 核心修复：海报模式复用胶片逻辑，回归胶片框
+// 海报模式：胶卷条排版 + 白底
 // ═══════════════════════════════
 function generatePoster(){
-  const n=photos.length, pr=PRESETS[preset];
-  const colCount = parseInt(document.getElementById('fpsr').value); // 海报是列数
+  const n=photos.length,pr=PRESETS[preset];
+  const fps2=parseInt(document.getElementById('fpsr').value);
   const titleText=document.getElementById('posterTitle').value.trim()||'LIFE WITH FILM';
   const tags=[document.getElementById('tag1').value.trim(),document.getElementById('tag2').value.trim(),document.getElementById('tag3').value.trim()].filter(t=>t.length>0);
-  
-  // 海报模式下，胶片的尺寸稍微调整，让间距更大，适合白底
-  let PERF_H, FRAME_W, FRAME_H, STRIP_H, GAP_P = 16, P_MARGIN=40, P_TITLE_H=80, P_TAG_H=tags.length>0?70:0;
-  
-  // 这里的filmMode控制单张照片的比例，海报模式下单条胶片还是横向的，但列数是垂直的
-  if(filmMode==='portrait'){
-    PERF_H = 22;
-    FRAME_W = 160;
-    FRAME_H = Math.round(FRAME_W * 1.5);
-  } else {
-    PERF_H = 20;
-    FRAME_W = 200;
-    FRAME_H = Math.round(FRAME_W / 1.5);
-  }
-  STRIP_H = FRAME_H + PERF_H * 2;
-  
-  // 单列的话放大照片
-  if(colCount === 1){
-    FRAME_W = Math.min(FRAME_W * 1.3, 350);
-    FRAME_H = filmMode==='portrait' ? Math.round(FRAME_W * 1.5) : Math.round(FRAME_W / 1.5);
-    STRIP_H = FRAME_H + PERF_H * 2;
-  }
-  
-  // 海报模式下，把“每列”拆成“多条横向胶片”？不对，应该是：
-  // 每列是一条竖向排列的胶片？不，复用横向胶片逻辑更简单，把“列”作为“行”，转个思路
-  // 哦不，用户说的“单列”，是指竖版长图，一列从上到下。所以我们把原来的“行”和“列”换一下，
-  // 并且把单条胶片做成“只有一帧的竖向胶片”？
-  // 不对，更简单的：复用 drawSingleStrip，但是把胶片旋转90度？或者直接调整为“每条胶片只有1帧，多条胶片垂直排列”
-  // 为了最简单且保留胶片框，我们这样：
-  // 海报模式下，fps=1（每条胶片只有1帧），列数=原来的行数
-  const rows = colCount; // 这里的rows是“垂直列数”，哦不，反过来：
-  const itemsPerStrip = 1; // 每条胶片只放1张照片
-  const strips = Math.ceil(n / itemsPerStrip);
-  const cols = colCount; // 垂直方向排cols条胶片
-  
-  const finalW = P_MARGIN * 2 + cols * (FRAME_W + EDGE*2 + GAP_P) - GAP_P;
-  const finalH = P_MARGIN + P_TITLE_H + Math.ceil(strips / cols) * (STRIP_H + GAP_P) - GAP_P + P_TAG_H + P_MARGIN;
-  
-  const S = 2;
+  const S=2;
   const cv=document.getElementById('cv'),ctx=cv.getContext('2d');
-  cv.width=finalW*S;cv.height=finalH*S;cv.style.width=finalW+'px';cv.style.height=finalH+'px';ctx.scale(S,S);
-  
-  // 白底纹理
-  ctx.fillStyle='#f8f5ee';
-  ctx.fillRect(0,0,finalW,finalH);
-  for(let i=0;i<1500;i++){ctx.fillStyle=`rgba(0,0,0,${Math.random()*0.015})`;ctx.fillRect(Math.random()*finalW,Math.random()*finalH,1,1)}
-  
-  // 标题
-  let curY = P_MARGIN;
-  ctx.fillStyle='#111';
-  ctx.textAlign = 'center';
-  ctx.font = `bold 48px 'Special Elite', monospace`;
-  ctx.fillText(titleText.toUpperCase(), finalW/2, curY+55);
-  curY += P_TITLE_H;
-  
-  // 绘制胶片条（每条1帧，垂直排列成cols列）
-  const startX = (finalW - (cols * (FRAME_W + EDGE*2) + (cols-1)*GAP_P)) / 2;
-  let globalFrame = 0;
-  
-  for(let s=0; s<strips; s++){
-    const col = s % cols;
-    const row = Math.floor(s / cols);
-    const sx = startX + col * (FRAME_W + EDGE*2 + GAP_P);
-    const sy = curY + row * (STRIP_H + GAP_P);
-    const stripW = FRAME_W + EDGE*2;
-    const rowPhotos = photos.slice(s*itemsPerStrip, (s+1)*itemsPerStrip);
-    
-    drawSingleStrip(ctx, sx, sy, stripW, STRIP_H, FRAME_W, FRAME_H, PERF_H, pr, rowPhotos, globalFrame, true);
-    globalFrame += rowPhotos.length;
+  // ── 胶卷条排版（复用 filmroll 几何逻辑，白底无胶卷筒）──
+  let STRIP_H2,PERF_H2,FRAME_W2,FRAME_H2,STRIP_W2;
+  if(filmMode==='portrait'){
+    PERF_H2=PORT.perfH;FRAME_W2=PORT.frameW;FRAME_H2=PORT.frameH;STRIP_H2=PORT.stripH;STRIP_W2=PORT.stripW(fps2);
+  } else {
+    PERF_H2=LAND.perfH;FRAME_H2=LAND.frameH;FRAME_W2=LAND.frameW;STRIP_H2=LAND.stripH;STRIP_W2=LAND.stripW(fps2);
   }
-  
-  curY += Math.ceil(strips / cols) * (STRIP_H + GAP_P) - GAP_P + 20;
-  
-  // 底部标签
+  const rows2=Math.ceil(n/fps2);
+  const WB_OUTER=36,TITLE_H2=80,TAG_H2=tags.length>0?50:0,STRIP_MARGIN=20;
+  const finalW2=WB_OUTER*2+STRIP_MARGIN+STRIP_W2;
+  const finalH2=WB_OUTER+TITLE_H2+rows2*STRIP_H2+(rows2-1)*ROW_GAP+TAG_H2+WB_OUTER;
+  cv.width=finalW2*S;cv.height=finalH2*S;ctx.scale(S,S);fitCanvasPreview(cv,finalW2,finalH2);
+  ctx.fillStyle='#f8f5ee';ctx.fillRect(0,0,finalW2,finalH2);
+  const sGrad=ctx.createLinearGradient(0,0,0,finalH2);sGrad.addColorStop(0,'rgba(0,0,0,0.05)');sGrad.addColorStop(0.1,'rgba(0,0,0,0)');sGrad.addColorStop(0.9,'rgba(0,0,0,0)');sGrad.addColorStop(1,'rgba(0,0,0,0.05)');ctx.fillStyle=sGrad;ctx.fillRect(0,0,finalW2,finalH2);
+  for(let i=0;i<800;i++){ctx.fillStyle=`rgba(0,0,0,${Math.random()*0.018})`;ctx.fillRect(Math.random()*finalW2,Math.random()*finalH2,1,1)}
+  ctx.fillStyle='#111111';ctx.textAlign='left';ctx.font=`bold 38px 'Special Elite', monospace`;ctx.fillText(titleText.toUpperCase(),WB_OUTER+STRIP_MARGIN,WB_OUTER+52);
+  ctx.font=`13px 'Noto Serif SC', serif`;ctx.fillStyle='#888';ctx.fillText(`🖼 ${n}`,WB_OUTER+STRIP_MARGIN,WB_OUTER+70);
+  const stripX2=WB_OUTER+STRIP_MARGIN;let contentY2=WB_OUTER+TITLE_H2;let globalFrame2=0;
+  function dpLocal(ctx,x,y,sw,ph,pr){const hC=Math.max(4,Math.round(sw/20)),hW=9,hH=Math.round(ph*0.55),hR=2,hs=sw/hC;ctx.fillStyle=pr.holeBg;for(let i=0;i<hC;i++){rrect(ctx,x+hs*i+(hs-hW)/2,y+(ph-hH)/2,hW,hH,hR);ctx.fill()}}
+  const ppPr={...pr,filmBg:'#1a1a1a',holeBg:'#080808'};
+  for(let row=0;row<rows2;row++){
+    if(row>0)contentY2+=ROW_GAP;
+    const rowPhotos=photos.slice(row*fps2,(row+1)*fps2),y2=contentY2,empty=fps2-rowPhotos.length;
+    ctx.fillStyle=ppPr.filmBg;
+    if(row===rows2-1&&empty>0){
+      const tW2=empty*(FRAME_W2+GAP),ts2=stripX2+STRIP_W2-tW2,hz2=PERF_H2,midT=y2+hz2,midB=y2+STRIP_H2-hz2,nW2=tW2*0.1,nT=midT-(midB-midT)*0.05,nB=midB+(midB-midT)*0.05,cr=8;
+      ctx.beginPath();ctx.moveTo(stripX2,y2);ctx.lineTo(ts2,y2);ctx.lineTo(ts2,nT);ctx.lineTo(ts2+nW2,nT);ctx.lineTo(ts2+nW2,midT);ctx.quadraticCurveTo(stripX2+STRIP_W2,midT,stripX2+STRIP_W2,midT+cr);ctx.lineTo(stripX2+STRIP_W2,midB-cr);ctx.quadraticCurveTo(stripX2+STRIP_W2,midB,stripX2+STRIP_W2-cr,midB);ctx.lineTo(ts2+nW2,midB);ctx.lineTo(ts2+nW2,nB);ctx.lineTo(ts2,nB);ctx.lineTo(stripX2,y2+STRIP_H2);ctx.lineTo(stripX2,y2);ctx.closePath();ctx.fill();
+      const tg2=ctx.createLinearGradient(ts2,0,stripX2+STRIP_W2,0);tg2.addColorStop(0,'rgba(0,0,0,0)');tg2.addColorStop(1,'rgba(0,0,0,0.6)');ctx.save();ctx.fillStyle=tg2;ctx.fillRect(ts2,y2,tW2,STRIP_H2);ctx.restore();
+      dpLocal(ctx,stripX2,y2,ts2-stripX2,PERF_H2,ppPr);dpLocal(ctx,stripX2,y2+STRIP_H2-PERF_H2,ts2-stripX2,PERF_H2,ppPr);
+    } else {ctx.fillRect(stripX2,y2,STRIP_W2,STRIP_H2);dpLocal(ctx,stripX2,y2,STRIP_W2,PERF_H2,ppPr);dpLocal(ctx,stripX2,y2+STRIP_H2-PERF_H2,STRIP_W2,PERF_H2,ppPr)}
+    for(let f=0;f<fps2;f++){
+      const fx2=stripX2+EDGE+f*(FRAME_W2+GAP),fy2=y2+PERF_H2;
+      if(f<rowPhotos.length){
+        const proc=applyLook(rowPhotos[f].canvas,pr,intensity);
+        ctx.save();ctx.beginPath();ctx.rect(fx2,fy2,FRAME_W2,FRAME_H2);ctx.clip();
+        const srcW2=proc.width,srcH2=proc.height,srcAsp2=srcW2/srcH2,dstAsp2=FRAME_W2/FRAME_H2;
+        let sx2=0,sy2=0,sw2=srcW2,sh2=srcH2;
+        if(srcAsp2>dstAsp2){sw2=srcH2*dstAsp2;sx2=(srcW2-sw2)/2}else{sh2=srcW2/dstAsp2;sy2=(srcH2-sh2)/2}
+        ctx.drawImage(proc,sx2,sy2,sw2,sh2,fx2,fy2,FRAME_W2,FRAME_H2);ctx.restore();
+        ctx.fillStyle='rgba(255,255,255,0.22)';ctx.font=`bold ${Math.round(STRIP_H2*0.07)}px monospace`;ctx.textAlign='center';ctx.fillText((globalFrame2+f+1).toString(),fx2+FRAME_W2/2,y2+PERF_H2-Math.round(PERF_H2*0.2));
+      }
+    }
+    globalFrame2+=rowPhotos.length;contentY2+=STRIP_H2;
+  }
   if(tags.length>0){
-    const tagH=36,tagPadX=14,tagFontSize=13,tagGap=10,tagRadius=4;
-    ctx.font=`${tagFontSize}px 'Noto Serif SC', monospace`;
-    let totalTagW = 0;
-    tags.forEach(t=>totalTagW += ctx.measureText(t).width + tagPadX*2 + tagGap);
-    totalTagW -= tagGap;
-    let tagX = (finalW - totalTagW)/2;
-    
-    tags.forEach(tagText=>{
-      const textW=ctx.measureText(tagText).width,tW=textW+tagPadX*2;
-      ctx.fillStyle='#111';rrect(ctx,tagX,curY,tW,tagH,tagRadius);ctx.fill();
-      ctx.fillStyle='#fff';
-      ctx.textAlign='center';
-      ctx.font=`${tagFontSize}px 'Noto Serif SC', monospace`;
-      ctx.fillText(tagText,tagX+tW/2,curY+tagPadX+tagFontSize);
-      tagX+=tW+tagGap;
-    });
+    contentY2+=16;const tagH=32,tagPX=14,tagFS=12,tagGap=8,tagR=3;ctx.font=`${tagFS}px 'Noto Serif SC', monospace`;ctx.textAlign='left';let tagX=stripX2;
+    tags.forEach(t=>{const tW=ctx.measureText(t).width+tagPX*2;ctx.fillStyle='#111111';rrect(ctx,tagX,contentY2,tW,tagH,tagR);ctx.fill();ctx.fillStyle='#ffffff';ctx.font=`${tagFS}px 'Noto Serif SC', monospace`;ctx.fillText(t,tagX+tagPX,contentY2+tagPX+tagFS);tagX+=tW+tagGap});
   }
-  
   document.getElementById('ph').style.display='none';cv.style.display='block';document.getElementById('expb').disabled=false;
 }
-
 // ═══════════════════════════════
-// 胶卷模式（简化，复用 drawSingleStrip）
+// 胶卷模式保持不变（简化逻辑复用）
 // ═══════════════════════════════
 function generateFilmRoll(){
   const n=photos.length,pr=PRESETS[preset];
@@ -1033,7 +1008,7 @@ function generateFilmRoll(){
   let CH=PAD+(dateStr?20:8)+rows*STRIP_H+(rows-1)*ROW_GAP+ROW_GAP+PAD+18;
   const wbOff=useWB?WB:0,fullW=CW+wbOff*2,fullH=CH+wbOff*2;
   const cv=document.getElementById('cv'),ctx=cv.getContext('2d');
-  cv.width=fullW*S;cv.height=fullH*S;cv.style.width=fullW+'px';cv.style.height=fullH+'px';ctx.scale(S,S);
+  cv.width=fullW*S;cv.height=fullH*S;ctx.scale(S,S);fitCanvasPreview(cv,fullW,fullH);
   if(useWB){
     ctx.fillStyle='#f8f5ee';ctx.fillRect(0,0,fullW,fullH);
     const sGrad=ctx.createLinearGradient(0,0,0,fullH);sGrad.addColorStop(0,'rgba(0,0,0,0.06)');sGrad.addColorStop(0.08,'rgba(0,0,0,0)');sGrad.addColorStop(0.92,'rgba(0,0,0,0)');sGrad.addColorStop(1,'rgba(0,0,0,0.06)');ctx.fillStyle=sGrad;ctx.fillRect(0,0,fullW,fullH);
@@ -1044,12 +1019,20 @@ function generateFilmRoll(){
   if(dateStr){ctx.font='italic 11px Georgia,serif';ctx.fillStyle='#aaa';ctx.textAlign='left';ctx.fillText(dateStr,ox+LEFT_PAD,contentY+13);contentY+=20}else{contentY+=8}
   const stripX=ox+LEFT_PAD;let globalFrame=0;
   
+  // 复用胶卷绘制的小助手函数
+  function drawPerfsLocal(ctx,x,y,sw,perfH,pr){
+    const hCount=Math.max(4,Math.round(sw/20));
+    const hW=9,hH=Math.round(perfH*0.55),hR=2;
+    const hs=sw/hCount;
+    ctx.fillStyle=pr.holeBg;
+    for(let i=0;i<hCount;i++){rrect(ctx,x+hs*i+(hs-hW)/2,y+(perfH-hH)/2,hW,hH,hR);ctx.fill()}
+  }
+  
   for(let row=0;row<rows;row++){
     if(row>0)contentY+=ROW_GAP;
     const rowPhotos=photos.slice(row*fps,(row+1)*fps);const y=contentY;
     const emptySlots=fps-rowPhotos.length;
-    
-    // 处理胶卷舌头
+    ctx.fillStyle=pr.filmBg;
     if(row===rows-1&&emptySlots>0){
       const tongueWidth=emptySlots*(FRAME_W+GAP);
       const ts=stripX+STRIP_W-tongueWidth,hz=PERF_H;
@@ -1058,33 +1041,25 @@ function generateFilmRoll(){
       const notchTop=midTop-(midBot-midTop)*0.05,notchBot=midBot+(midBot-midTop)*0.05;
       const cornerRadius=8;
       ctx.beginPath();ctx.moveTo(stripX,y);ctx.lineTo(ts,y);ctx.lineTo(ts,notchTop);ctx.lineTo(ts+notchW,notchTop);ctx.lineTo(ts+notchW,midTop);ctx.quadraticCurveTo(stripX+STRIP_W,midTop,stripX+STRIP_W,midTop+cornerRadius);ctx.lineTo(stripX+STRIP_W,midBot-cornerRadius);ctx.quadraticCurveTo(stripX+STRIP_W,midBot,stripX+STRIP_W-cornerRadius,midBot);ctx.lineTo(ts+notchW,midBot);ctx.lineTo(ts+notchW,notchBot);ctx.lineTo(ts,notchBot);ctx.lineTo(stripX,y+STRIP_H);ctx.lineTo(stripX,y);ctx.closePath();ctx.fill();
-      
       const tailGrad=ctx.createLinearGradient(ts,0,stripX+STRIP_W,0);tailGrad.addColorStop(0,'rgba(0,0,0,0)');tailGrad.addColorStop(1,'rgba(0,0,0,0.6)');ctx.save();ctx.fillStyle=tailGrad;ctx.fillRect(ts,y,tongueWidth,STRIP_H);ctx.restore();
-      
-      // 绘制有舌头的部分胶片
-      drawSingleStrip(ctx, stripX, y, ts-stripX, STRIP_H, FRAME_W, FRAME_H, PERF_H, pr, rowPhotos, globalFrame, false);
-    } else {
-      drawSingleStrip(ctx, stripX, y, STRIP_W, STRIP_H, FRAME_W, FRAME_H, PERF_H, pr, rowPhotos, globalFrame, false);
+      drawPerfsLocal(ctx,stripX,y,ts-stripX,PERF_H,pr);drawPerfsLocal(ctx,stripX,y+STRIP_H-PERF_H,ts-stripX,PERF_H,pr);
+    }else{ctx.fillRect(stripX,y,STRIP_W,STRIP_H);drawPerfsLocal(ctx,stripX,y,STRIP_W,PERF_H,pr);drawPerfsLocal(ctx,stripX,y+STRIP_H-PERF_H,STRIP_W,PERF_H,pr)}
+    for(let f=0;f<fps;f++){
+      const fx=stripX+EDGE+f*(FRAME_W+GAP),fy=y+PERF_H;
+      if(f<rowPhotos.length){const processed=applyLook(rowPhotos[f].canvas,pr,intensity);ctx.save();ctx.beginPath();ctx.rect(fx,fy,FRAME_W,FRAME_H);ctx.clip();ctx.drawImage(processed,fx,fy,FRAME_W,FRAME_H);ctx.restore()}
+      if(f<rowPhotos.length){ctx.fillStyle='rgba(255,255,255,0.22)';ctx.font=`bold ${Math.round(STRIP_H*0.07)}px monospace`;ctx.textAlign='center';ctx.fillText((globalFrame+f+1).toString(),fx+FRAME_W/2,y+PERF_H-Math.round(PERF_H*0.2))}
     }
-    
+    const ldrName=LEADERS[leaderIdx].name.replace('\n',' ').toUpperCase();
+    ctx.font=`${Math.round(PERF_H*0.4)}px monospace`;ctx.fillStyle='rgba(255,255,255,0.18)';ctx.textAlign='left';ctx.fillText(ldrName,stripX+EDGE,y+PERF_H*0.55);
     if(row===0){const canX=stripX-CAN_W+CAN_OVERLAP;drawCanister(ctx,canX,y,CAN_W,CAN_W*(STRIP_H/(STRIP_H*0.60)))}
-    
-    // 胶卷名称
-    if(row === 0){
-      const ldrName=LEADERS[leaderIdx].name.replace('\n',' ').toUpperCase();
-      ctx.font=`${Math.round(PERF_H*0.4)}px monospace`;ctx.fillStyle='rgba(255,255,255,0.18)';ctx.textAlign='left';ctx.fillText(ldrName,stripX+EDGE,y+PERF_H*0.55);
-    }
-    
     globalFrame+=rowPhotos.length;contentY+=STRIP_H;
   }
   contentY+=ROW_GAP;
   const filmName=LEADERS[leaderIdx].name.replace('\n',' ');
   ctx.font='10px monospace';ctx.fillStyle=useWB?'#aaa':'#888';ctx.textAlign='center';
   ctx.fillText(filmName+(dateStr?' · '+dateStr:''),ox+LEFT_PAD+STRIP_W/2,contentY+10);
-  
   document.getElementById('ph').style.display='none';cv.style.display='block';document.getElementById('expb').disabled=false;
 }
-
 // ═══════════════════════════════
 // GENERATE DISPATCHER
 // ═══════════════════════════════
@@ -1096,7 +1071,6 @@ function generate(){
   sheetOpen=false;sheet.classList.remove('open');
   if(outputMode==='poster')generatePoster();else generateFilmRoll();
 }
-
 // ═══════════════════════════════
 // EXPORT
 // ═══════════════════════════════
@@ -1106,13 +1080,12 @@ function exportPNG(){
   const name=outputMode==='poster'?`film-poster-${Date.now()}.png`:`film-${filmMode}-${LEADERS[leaderIdx].name.replace(/\n/g,'-').replace(/\s+/g,'')}-${Date.now()}.png`;
   const a=document.createElement('a');a.download=name;a.href=cv.toDataURL('image/png');a.click();
 }
-
 // ═══════════════════════════════
 // INIT
 // ═══════════════════════════════
 initLeaderGrid();
 renderThumbs();
-updateLayoutUI();
+updateLayoutUI(); // 初始化布局UI
 </script>
 </body>
 </html>
