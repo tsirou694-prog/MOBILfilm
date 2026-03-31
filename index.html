@@ -636,65 +636,74 @@ function loadImage(file, orientation) {
   });
 }
 
+// 辅助：创建canvas并执行绘制函数
+function makeCanvas(w,h,drawFn){
+  const c=document.createElement('canvas');
+  c.width=w;c.height=h;
+  drawFn(c.getContext('2d'),c);
+  return c;
+}
+
 function normalizeImg(src,crop,targetAsp,orientation,userRotate){
   if(targetAsp===undefined) targetAsp=filmMode==='portrait'?(2/3):(3/2);
   if(userRotate===undefined) userRotate=0;
   const TW=filmMode==='portrait'?400:600;
   const TH=Math.round(TW/targetAsp);
-  const c=document.createElement('canvas');c.width=TW;c.height=TH;
-  const ctx=c.getContext('2d');
-  ctx.fillStyle='#111';ctx.fillRect(0,0,TW,TH);
-  
-  // First draw the source image with EXIF correction into a temp canvas
-  const tmp=document.createElement('canvas');
-  let sw=src.naturalWidth||src.width,sh=src.naturalHeight||src.height;
-  tmp.width=sw;tmp.height=sh;
-  const tctx=tmp.getContext('2d');
-  tctx.drawImage(src,0,0);
-  
-  // Apply EXIF orientation to tmp
+
+  // Step 1: 把 src（img 或 canvas）画进初始 canvas
+  const srcW0=src.naturalWidth||src.width;
+  const srcH0=src.naturalHeight||src.height;
+  let cur=makeCanvas(srcW0,srcH0,(ctx)=>ctx.drawImage(src,0,0));
+
+  // Step 2: EXIF 旋转修正（每步创建新 canvas，不重用）
   if(orientation && orientation>1){
-    const tc2=document.createElement('canvas');
-    const rotated=[5,6,7,8].includes(orientation);
-    tc2.width=rotated?sh:sw;tc2.height=rotated?sw:sh;
-    const tctx2=tc2.getContext('2d');
-    switch(orientation){
-      case 2:tctx2.translate(tc2.width,0);tctx2.scale(-1,1);break;
-      case 3:tctx2.translate(tc2.width,tc2.height);tctx2.rotate(Math.PI);break;
-      case 4:tctx2.translate(0,tc2.height);tctx2.scale(1,-1);break;
-      case 5:tctx2.rotate(0.5*Math.PI);tctx2.scale(1,-1);break;
-      case 6:tctx2.rotate(0.5*Math.PI);tctx2.translate(0,-tc2.height);break;
-      case 7:tctx2.rotate(-0.5*Math.PI);tctx2.translate(-tc2.width,0);tctx2.scale(1,-1);break;
-      case 8:tctx2.rotate(-0.5*Math.PI);tctx2.translate(-tc2.width,0);break;
-    }
-    tctx2.drawImage(tmp,0,0);
-    sw=tc2.width;sh=tc2.height;
-    tmp.width=sw;tmp.height=sh;
-    tmp.getContext('2d').drawImage(tc2,0,0);
+    const swapped=[5,6,7,8].includes(orientation);
+    const w2=swapped?cur.height:cur.width;
+    const h2=swapped?cur.width:cur.height;
+    const prev=cur;
+    cur=makeCanvas(w2,h2,(ctx)=>{
+      switch(orientation){
+        case 2:ctx.translate(w2,0);ctx.scale(-1,1);break;
+        case 3:ctx.translate(w2,h2);ctx.rotate(Math.PI);break;
+        case 4:ctx.translate(0,h2);ctx.scale(1,-1);break;
+        case 5:ctx.rotate(0.5*Math.PI);ctx.scale(1,-1);break;
+        case 6:ctx.translate(h2,0);ctx.rotate(0.5*Math.PI);break;
+        case 7:ctx.translate(h2,0);ctx.rotate(0.5*Math.PI);ctx.scale(1,-1);break;
+        case 8:ctx.translate(0,w2);ctx.rotate(-0.5*Math.PI);break;
+      }
+      ctx.drawImage(prev,0,0);
+    });
   }
-  
-  // Apply user rotation (0,90,180,270)
-  if(userRotate!==0){
-    const ur=((userRotate%360)+360)%360;
-    const tc3=document.createElement('canvas');
-    const swap=(ur===90||ur===270);
-    tc3.width=swap?sh:sw;tc3.height=swap?sw:sh;
-    const tctx3=tc3.getContext('2d');
-    tctx3.translate(tc3.width/2,tc3.height/2);
-    tctx3.rotate(ur*Math.PI/180);
-    tctx3.drawImage(tmp,-sw/2,-sh/2);
-    sw=tc3.width;sh=tc3.height;
-    tmp.width=sw;tmp.height=sh;
-    tmp.getContext('2d').drawImage(tc3,0,0);
+
+  // Step 3: 用户手动旋转（90°步进，每步创建新 canvas）
+  const ur=((userRotate%360)+360)%360;
+  if(ur!==0){
+    const swapU=(ur===90||ur===270);
+    const w3=swapU?cur.height:cur.width;
+    const h3=swapU?cur.width:cur.height;
+    const prev=cur;
+    cur=makeCanvas(w3,h3,(ctx)=>{
+      ctx.translate(w3/2,h3/2);
+      ctx.rotate(ur*Math.PI/180);
+      ctx.drawImage(prev,-prev.width/2,-prev.height/2);
+    });
   }
-  
-  // Crop and draw into final canvas
-  const sAsp=sw/sh;
-  let srcX=0,srcY=0,srcW=sw,srcH=sh;
-  if(sAsp>targetAsp){srcW=sh*targetAsp;srcX=(sw-srcW)/2}
-  else{srcH=sw/targetAsp;const spare=sh-srcH;srcY=crop==='top'?0:crop==='bot'?spare:spare/2}
-  ctx.drawImage(tmp,srcX,srcY,srcW,srcH,0,0,TW,TH);
-  return c;
+
+  // Step 4: 裁剪到目标比例，输出最终 canvas
+  const cw=cur.width,ch=cur.height;
+  const sAsp=cw/ch;
+  let srcX=0,srcY=0,srcW=cw,srcH=ch;
+  if(sAsp>targetAsp){
+    srcW=ch*targetAsp;srcX=(cw-srcW)/2;
+  } else {
+    srcH=cw/targetAsp;
+    const spare=ch-srcH;
+    srcY=crop==='top'?0:crop==='bot'?spare:spare/2;
+  }
+  return makeCanvas(TW,TH,(ctx)=>{
+    ctx.fillStyle='#111';ctx.fillRect(0,0,TW,TH);
+    ctx.drawImage(cur,srcX,srcY,srcW,srcH,0,0,TW,TH);
+  });
 }
 
 function renderThumbs(){
