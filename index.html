@@ -382,6 +382,16 @@ function fitCanvasPreview(cv, logicalW, logicalH){
   cv.style.height = Math.round(logicalH * scale) + 'px';
 }
 // ═══════════════════════════════
+// CANVAS UTILITY - must be defined early
+// ═══════════════════════════════
+function makeCanvas(w,h,drawFn){
+  const c=document.createElement('canvas');
+  c.width=Math.max(1,Math.round(w));
+  c.height=Math.max(1,Math.round(h));
+  drawFn(c.getContext('2d'),c);
+  return c;
+}
+// ═══════════════════════════════
 // STATE
 // ═══════════════════════════════
 let photos = [];
@@ -601,19 +611,22 @@ function loadImage(file, orientation) {
   return new Promise((resolve) => {
     const url = URL.createObjectURL(file);
     const img = new Image();
-    
+
     const timeoutId = setTimeout(() => {
       URL.revokeObjectURL(url);
       resolve(null);
     }, 15000);
-    
+
     img.onload = () => {
       clearTimeout(timeoutId);
       try {
-        const canvas = normalizeImg(img, 'mid', undefined, orientation);
-        URL.revokeObjectURL(url);
+        // 把原始像素永久存入 rawCanvas，之后不再依赖 img/URL
+        const w = img.naturalWidth, h = img.naturalHeight;
+        const rawCanvas = makeCanvas(w, h, (ctx) => ctx.drawImage(img, 0, 0));
+        URL.revokeObjectURL(url); // 此后 img/url 可以安全释放
+        const canvas = normalizeImg(rawCanvas, 'mid', undefined, orientation, 0);
         resolve({
-          raw: img,
+          raw: rawCanvas,   // 永久保存原始像素的 canvas
           canvas: canvas,
           name: file.name,
           crop: 'mid',
@@ -625,23 +638,15 @@ function loadImage(file, orientation) {
         resolve(null);
       }
     };
-    
+
     img.onerror = () => {
       clearTimeout(timeoutId);
       URL.revokeObjectURL(url);
       resolve(null);
     };
-    
+
     img.src = url;
   });
-}
-
-// 辅助：创建canvas并执行绘制函数
-function makeCanvas(w,h,drawFn){
-  const c=document.createElement('canvas');
-  c.width=w;c.height=h;
-  drawFn(c.getContext('2d'),c);
-  return c;
 }
 
 function normalizeImg(src,crop,targetAsp,orientation,userRotate){
@@ -1055,7 +1060,7 @@ function generateFilmRoll(){
     }else{ctx.fillRect(stripX,y,STRIP_W,STRIP_H);drawPerfsLocal(ctx,stripX,y,STRIP_W,PERF_H,pr);drawPerfsLocal(ctx,stripX,y+STRIP_H-PERF_H,STRIP_W,PERF_H,pr)}
     for(let f=0;f<fps;f++){
       const fx=stripX+EDGE+f*(FRAME_W+GAP),fy=y+PERF_H;
-      if(f<rowPhotos.length){const processed=applyLook(rowPhotos[f].canvas,pr,intensity);ctx.save();ctx.beginPath();ctx.rect(fx,fy,FRAME_W,FRAME_H);ctx.clip();ctx.drawImage(processed,fx,fy,FRAME_W,FRAME_H);ctx.restore()}
+      if(f<rowPhotos.length){const processed=applyLook(rowPhotos[f].canvas,pr,intensity);ctx.save();ctx.beginPath();ctx.rect(fx,fy,FRAME_W,FRAME_H);ctx.clip();ctx.drawImage(processed,0,0,processed.width,processed.height,fx,fy,FRAME_W,FRAME_H);ctx.restore()}
       if(f<rowPhotos.length){ctx.fillStyle='rgba(255,255,255,0.22)';ctx.font=`bold ${Math.round(STRIP_H*0.07)}px monospace`;ctx.textAlign='center';ctx.fillText((globalFrame+f+1).toString(),fx+FRAME_W/2,y+PERF_H-Math.round(PERF_H*0.2))}
     }
     const ldrName=LEADERS[leaderIdx].name.replace('\n',' ').toUpperCase();
